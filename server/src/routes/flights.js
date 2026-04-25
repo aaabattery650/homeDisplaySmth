@@ -57,6 +57,11 @@ function normalizeAircraft(raw) {
     const alt = a.alt_baro ?? a.alt_geom ?? a.geom_alt ?? a.altitude ?? a.alt;
     const altNum = typeof alt === 'number' && Number.isFinite(alt) ? alt : alt === 'ground' ? 0 : null;
 
+    const vel = a.gs ?? a.velocity ?? a.speed;
+    const vr = a.baro_rate ?? a.vert_rate ?? a.vertical_rate ?? a.verticalRate;
+    const tc = a.t ?? a.type ?? a.typecode ?? a.desc ?? null;
+    const oc = a.origin_country ?? a.originCountry ?? null;
+
     out.push({
       hex: a.hex != null ? String(a.hex) : undefined,
       callsign,
@@ -64,6 +69,10 @@ function normalizeAircraft(raw) {
       lon: a.lon,
       track,
       altFt: altNum,
+      velocity: vel != null && Number.isFinite(Number(vel)) ? Number(vel) : null,
+      verticalRate: vr != null && Number.isFinite(Number(vr)) ? Number(vr) : null,
+      typecode: tc != null ? String(tc) : null,
+      originCountry: oc != null ? String(oc) : null,
     });
   }
   return out;

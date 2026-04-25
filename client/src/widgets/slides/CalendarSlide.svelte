@@ -70,7 +70,7 @@
   }
 </script>
 
-<Slide eyebrow="Coming up" title="Family schedule">
+<Slide title="Coming up">
   {#if error}
     <div class="err">Calendar offline</div>
   {:else if events.length === 0}

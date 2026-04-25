@@ -4,7 +4,6 @@
   import FlightMap from './FlightMap.svelte';
   import { fetchFlights, HOME_LAT, HOME_LON } from '../../lib/api.js';
 
-  /** ~85 km full width; frames most of the area; tune for your site */
   const HALF_SPAN_DEG = 0.09;
   const MAX_MARKERS = 40;
   const POLL_MS = 5000;
@@ -15,18 +14,17 @@
     return dlat * dlat + dlon * dlon;
   }
 
-  /** URL-only: ?flights=demo — wire layout without a receiver. */
   function wantDemo() {
     if (typeof location === 'undefined') return false;
     return new URLSearchParams(location.search).get('flights') === 'demo';
   }
 
   function demoAircraft() {
-    const s = 0.11;
+    const s = 0.06;
     return [
-      { hex: 'demo-1', callsign: 'DEMO1', lat: HOME_LAT + s * 0.55, lon: HOME_LON - s * 0.35, track: 35, altFt: 12500 },
-      { hex: 'demo-2', callsign: 'DEMO2', lat: HOME_LAT - s * 0.4, lon: HOME_LON + s * 0.45, track: 198, altFt: 8200 },
-      { hex: 'demo-3', callsign: 'DEMO3', lat: HOME_LAT + s * 0.2, lon: HOME_LON + s * 0.3, track: 300, altFt: 17600 },
+      { hex: 'demo-1', callsign: 'SIA321', lat: HOME_LAT + s * 0.55, lon: HOME_LON - s * 0.35, track: 35, altFt: 35100, velocity: 245, verticalRate: 2.5, typecode: 'B77W', originCountry: 'Singapore' },
+      { hex: 'demo-2', callsign: 'CPA987', lat: HOME_LAT - s * 0.4, lon: HOME_LON + s * 0.45, track: 198, altFt: 38000, velocity: 251, verticalRate: 0, typecode: 'A359', originCountry: 'China' },
+      { hex: 'demo-3', callsign: 'JSA411', lat: HOME_LAT + s * 0.2, lon: HOME_LON + s * 0.3, track: 300, altFt: 12400, velocity: 180, verticalRate: -4.2, typecode: 'B738', originCountry: 'Japan' },
     ];
   }
 
@@ -39,14 +37,28 @@
   let rows = $state([]);
   let detail = $state('loading');
   let source = $state('');
-
   let timer;
+
+  function verticalIcon(vr) {
+    if (vr == null || Math.abs(vr) < 0.5) return '→';
+    return vr > 0 ? '↗' : '↘';
+  }
+
+  function fmtAlt(ft) {
+    if (ft == null) return '—';
+    return ft.toLocaleString() + ' ft';
+  }
+
+  function fmtCountry(c) {
+    if (!c) return '—';
+    return c;
+  }
 
   async function load() {
     if (wantDemo()) {
       rows = demoAircraft();
       source = 'demo';
-      detail = 'Demo layout — remove ?flights=demo from the URL for live data';
+      detail = `${rows.length} flights · demo`;
       return;
     }
     try {
@@ -57,36 +69,18 @@
       source = r.source ?? '';
 
       if (r.source === 'disabled') {
-        detail = 'Flights disabled (FLIGHTS_PROVIDER=off or FLIGHTS_DATA_URL=off on the server).';
+        detail = 'Flights disabled';
       } else if (r.source === 'error') {
-        if (r.dataSource === 'opensky' && r.errorKind === 'rate') {
-          detail =
-            'OpenSky rate or daily limit — wait, raise OPENSKY_CACHE_MS, or set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET in server/.env';
-        } else if (r.dataSource === 'opensky') {
-          detail =
-            'OpenSky could not be reached. Check outbound HTTPS; optional OPENSKY_CLIENT_ID + OPENSKY_CLIENT_SECRET in server/.env for OAuth.';
-        } else if (r.dataSource === 'local' && r.error) {
-          detail = String(r.error);
-        } else {
-          detail =
-            'Local JSON feed failed. Set FLIGHTS_DATA_URL in server/.env or use OpenSky (unset FLIGHTS_DATA_URL, default).';
-        }
+        detail = 'Feed error — check server logs';
       } else if (raw.length === 0) {
-        detail =
-          r.dataSource === 'opensky'
-            ? 'No ADS-B in this map area from OpenSky (quiet, or no coverage this cycle).'
-            : 'No aircraft with a position in this update.';
+        detail = 'No aircraft overhead';
       } else {
-        const base = `showing ${list.length} of ${raw.length} (nearest to home)`;
-        detail =
-          r.dataSource === 'opensky'
-            ? `OpenSky${r.cached ? ' (cached on server' + (r.opensky?.fetchedAt ? ' · ' + r.opensky.fetchedAt : '') + ')' : ''} · ${base}`
-            : `Local feed · ${base}`;
+        detail = `${list.length} flight${list.length === 1 ? '' : 's'} tracked`;
       }
     } catch {
       rows = [];
       source = 'error';
-      detail = 'Request failed. Is the app server (Fastify) running on the proxy port?';
+      detail = 'Server unreachable';
     }
   }
 
@@ -100,35 +94,130 @@
   });
 </script>
 
-<Slide eyebrow="Overhead now" title="Above the house">
-  <div class="body">
-    <FlightMap
-      centerLat={HOME_LAT}
-      centerLon={HOME_LON}
-      halfSpanDeg={HALF_SPAN_DEG}
-      aircraft={rows}
-    />
-    <p class="foot tabular" class:warn={source === 'error' || source === 'disabled'}>
-      {detail}
-    </p>
+<Slide title="Overhead now">
+  <div class="split">
+    <div class="table-side">
+      {#if rows.length === 0}
+        <p class="empty">{detail}</p>
+      {:else}
+        <table class="flights-table">
+          <thead>
+            <tr>
+              <th>Flight</th>
+              <th>Origin</th>
+              <th></th>
+              <th>Altitude</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each rows.slice(0, 10) as ac}
+              <tr>
+                <td class="callsign">{ac.callsign}</td>
+                <td class="origin">{fmtCountry(ac.originCountry)}</td>
+                <td class="vr">{verticalIcon(ac.verticalRate)}</td>
+                <td class="alt tabular">{fmtAlt(ac.altFt)}</td>
+                <td class="type">{ac.typecode ?? '—'}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        <p class="foot tabular">{detail}</p>
+      {/if}
+    </div>
+    <div class="map-side">
+      <FlightMap
+        centerLat={HOME_LAT}
+        centerLon={HOME_LON}
+        halfSpanDeg={HALF_SPAN_DEG}
+        aircraft={rows}
+      />
+    </div>
   </div>
 </Slide>
 
 <style>
-  .body {
+  .split {
     flex: 1;
     min-height: 0;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 24px;
+  }
+
+  .table-side {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
   }
+
+  .map-side {
+    height: 380px;
+    width: 380px;
+    align-self: start;
+    border-radius: var(--radius-card, 16px);
+    overflow: hidden;
+  }
+
+  .flights-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--fs-body, 1.125rem);
+  }
+  thead th {
+    text-align: left;
+    font-size: var(--fs-small, 0.95rem);
+    font-weight: 500;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 0 12px 12px 0;
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-top: 1px solid var(--surface-border, rgba(255,255,255,0.1));
+  }
+  tbody td {
+    padding: 12px 12px 12px 0;
+    white-space: nowrap;
+  }
+
+  .callsign {
+    font-family: var(--font-mono);
+    font-size: var(--fs-medium, 1.375rem);
+    font-weight: 500;
+    color: var(--accent-warm);
+  }
+  .origin {
+    font-size: var(--fs-body);
+    color: #6fcf97;
+  }
+  .vr {
+    font-size: var(--fs-medium);
+    color: var(--text-secondary);
+    text-align: center;
+    width: 30px;
+  }
+  .alt {
+    font-size: var(--fs-body);
+    color: var(--text-primary);
+  }
+  .type {
+    font-family: var(--font-mono);
+    font-size: var(--fs-small);
+    color: var(--text-secondary);
+  }
+
   .foot {
-    margin: 0;
+    margin-top: auto;
+    padding-top: 12px;
     font-size: var(--fs-small);
     color: var(--text-tertiary);
-    font-family: var(--font-mono);
   }
-  .foot.warn {
+  .empty {
+    font-size: var(--fs-medium);
     color: var(--text-secondary);
+    margin: auto 0;
   }
 </style>

@@ -29,8 +29,18 @@ function shape(raw) {
   return (raw.results ?? []).map((l) => ({
     name: l.name,
     provider: l.launch_service_provider?.name ?? 'Unknown',
-    pad: l.pad?.name ?? l.pad?.location?.name ?? 'Unknown',
+    providerType: l.launch_service_provider?.type ?? null,
+    rocket: l.rocket?.configuration?.full_name ?? l.rocket?.configuration?.name ?? null,
+    mission: l.mission?.name ?? null,
+    missionType: l.mission?.type ?? null,
+    orbit: l.mission?.orbit?.abbrev ?? null,
+    pad: l.pad?.location?.name ?? l.pad?.name ?? 'Unknown',
     net: l.net,
+    windowStart: l.window_start ?? null,
+    windowEnd: l.window_end ?? null,
     status: l.status?.abbrev ?? null,
+    statusName: l.status?.name ?? null,
+    image: l.image ?? null,
+    probability: l.probability ?? null,
   }));
 }

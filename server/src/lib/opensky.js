@@ -23,6 +23,10 @@ let dataCache = {
 /**
  * @param {import('fastify').FastifyInstance['log']} log
  */
+// In-memory cache: hex → typecode (e.g. "B738"). null = lookup attempted, no result.
+const typeCache = new Map();
+const TYPE_LOOKUP_MAX = 3; // max lookups per fetch cycle to avoid rate limits
+
 function stateToAircraft(s) {
   if (!s || s.length < 7) return null;
   const lon = s[5];
@@ -34,10 +38,17 @@ function stateToAircraft(s) {
   const callsign = rawCs || hex || '—';
   const baroM = s[7];
   const tr = s[10];
+  const vel = s[9];
+  const vr = s[11];
   const altFt =
     baroM != null && Number.isFinite(baroM) ? Math.round(baroM * 3.28084) : null;
   const track =
     tr != null && Number.isFinite(tr) ? ((Number(tr) % 360) + 360) % 360 : 0;
+  const velocity =
+    vel != null && Number.isFinite(vel) ? Number(vel) : null;
+  const verticalRate =
+    vr != null && Number.isFinite(vr) ? Number(vr) : null;
+  const originCountry = s[2] != null ? String(s[2]) : null;
   return {
     hex: hex || undefined,
     callsign,
@@ -45,7 +56,40 @@ function stateToAircraft(s) {
     lon: Number(lon),
     track,
     altFt,
+    velocity,
+    verticalRate,
+    originCountry,
+    typecode: null, // enriched later
   };
+}
+
+async function enrichWithType(aircraft, log) {
+  let lookups = 0;
+  for (const ac of aircraft) {
+    if (!ac.hex) continue;
+    if (typeCache.has(ac.hex)) {
+      ac.typecode = typeCache.get(ac.hex);
+      continue;
+    }
+    if (lookups >= TYPE_LOOKUP_MAX) continue;
+    lookups++;
+    try {
+      const res = await fetch(
+        `${OPENSKY_API}/metadata/aircraft/icao/${ac.hex}`,
+        { signal: AbortSignal.timeout(5000), headers: { accept: 'application/json' } }
+      );
+      if (res.ok) {
+        const meta = await res.json();
+        const tc = meta?.typecode || meta?.icao24TypeCode || null;
+        typeCache.set(ac.hex, tc);
+        ac.typecode = tc;
+      } else {
+        typeCache.set(ac.hex, null);
+      }
+    } catch {
+      typeCache.set(ac.hex, null);
+    }
+  }
 }
 
 function bboxParams() {
@@ -158,6 +202,9 @@ export async function getOpenSkyAircraft(app) {
   }
 
   const result = await fetchStates(log);
+  if (!result.err && result.aircraft.length > 0) {
+    await enrichWithType(result.aircraft, log);
+  }
   if (result.err) {
     dataCache = {
       at: now,

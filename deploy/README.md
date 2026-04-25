@@ -10,6 +10,22 @@ This guide walks you through setting up the homeDisplay wall-mounted dashboard o
 - Power supply (USB-C, 27 W for Pi 5)
 - Ethernet or Wi-Fi connectivity
 
+## Quick setup (recommended)
+
+A single script handles steps 2–9 below automatically. After flashing the OS and cloning the repo:
+
+```bash
+cd ~/homeDisplay
+bash deploy/setup.sh
+sudo reboot
+```
+
+The script is idempotent — safe to re-run. It auto-detects the current user and install path, so it works whether you log in as `pi` or another username.
+
+If you prefer to do each step manually, follow the detailed instructions below.
+
+---
+
 ## 1. Flash Raspberry Pi OS
 
 1. Download [Raspberry Pi Imager](https://www.raspberrypi.com/software/).

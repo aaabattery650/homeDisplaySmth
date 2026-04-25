@@ -55,7 +55,7 @@
   }
   .date {
     margin-top: 10px;
-    font-size: var(--fs-medium);
+    font-size: var(--fs-xlarge);
     color: var(--text-secondary);
     font-weight: 400;
   }
