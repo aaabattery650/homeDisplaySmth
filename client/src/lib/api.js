@@ -12,6 +12,12 @@ export async function fetchWeather({ lat = DEFAULT_LAT, lon = DEFAULT_LON } = {}
   return res.json();
 }
 
+export async function fetchLaunches() {
+  const res = await fetch('/api/launches');
+  if (!res.ok) throw new Error(`launches ${res.status}`);
+  return res.json();
+}
+
 /**
  * @returns {Promise<{
  *   aircraft: Array<{ hex?: string, callsign: string, lat: number, lon: number, track: number, altFt: number | null }>,
@@ -27,4 +33,11 @@ export async function fetchFlights() {
   const res = await fetch('/api/flights');
   if (!res.ok) throw new Error(`flights ${res.status}`);
   return res.json();
+}
+
+export async function fetchEvents(from, to) {
+  const res = await fetch(`/api/events?from=${from}&to=${to}`);
+  if (!res.ok) throw new Error(`events ${res.status}`);
+  const data = await res.json();
+  return data.events;
 }

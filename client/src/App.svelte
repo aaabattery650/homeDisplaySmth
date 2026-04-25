@@ -5,7 +5,7 @@
   import CalendarSlide from './widgets/slides/CalendarSlide.svelte';
   import LaunchesSlide from './widgets/slides/LaunchesSlide.svelte';
   import FlightsSlide from './widgets/slides/FlightsSlide.svelte';
-  import { rotation, startRotation, stopRotation } from './lib/rotation.svelte.js';
+  import { rotation, startRotation, stopRotation, nextSlide, prevSlide } from './lib/rotation.svelte.js';
   import { WeatherFx } from './lib/weatherFx/WeatherFx.js';
   import { applyPalette } from './lib/palettes.js';
 
@@ -59,21 +59,26 @@
     applyState(kind, isDay);
   }
 
+  function handleKeydown(e) {
+    if (e.key === 'ArrowRight') { e.preventDefault(); nextSlide(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
+  }
+
   onMount(async () => {
     fx = new WeatherFx(bgEl, {
       onFlash: (a) => (flashAlpha = a),
       onShake: (x, y) => { shakeX = x; shakeY = y; },
     });
     await fx.init();
-    // Use override at boot if present, otherwise hold on 'clear' until the
-    // real weather lands.
     fx.setWeather(devOverride() ?? 'clear');
     startRotation();
+    window.addEventListener('keydown', handleKeydown);
   });
 
   onDestroy(() => {
     stopRotation();
     fx?.destroy();
+    window.removeEventListener('keydown', handleKeydown);
   });
 
   let activeSlide = $derived(rotation.slides[rotation.index].id);
@@ -91,9 +96,11 @@
   <header class="topbar">
     <Clock />
     <WeatherSummary {onWeather} />
+    <a href="/admin/" target="_blank" class="admin-link" aria-label="Admin">⚙</a>
   </header>
 
   <section class="stage">
+    <button class="nav nav-left" onclick={prevSlide} aria-label="Previous slide">&#8249;</button>
     {#key activeSlide}
       {#if activeSlide === 'calendar'}
         <CalendarSlide />
@@ -103,6 +110,7 @@
         <FlightsSlide />
       {/if}
     {/key}
+    <button class="nav nav-right" onclick={nextSlide} aria-label="Next slide">&#8250;</button>
   </section>
 </main>
 
@@ -146,15 +154,53 @@
 
   .topbar {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr auto auto;
     align-items: center;
     gap: 48px;
   }
 
+  .admin-link {
+    font-size: 1.8rem;
+    color: var(--text-tertiary);
+    opacity: 0.5;
+    text-decoration: none;
+    transition: opacity 200ms ease;
+  }
+  .admin-link:hover { opacity: 0.8; }
+
   .stage {
     min-height: 0;
     display: flex;
+    position: relative;
+    align-items: stretch;
   }
+
+  .nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+    background: var(--surface-bg, rgba(255, 255, 255, 0.08));
+    border: 1px solid var(--surface-border, rgba(255, 255, 255, 0.12));
+    color: var(--text-secondary, rgba(255, 255, 255, 0.6));
+    font-size: 2rem;
+    width: 44px;
+    height: 64px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0.4;
+    transition: opacity 200ms ease, background 200ms ease;
+    backdrop-filter: blur(6px);
+  }
+  .nav:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.14);
+  }
+  .nav-left { left: 12px; }
+  .nav-right { right: 12px; }
 
   /* Quiet hours: dim everything, slow motion. WeatherFx handles its own
      dimming via setDimmed; this class is for the DOM layer. */

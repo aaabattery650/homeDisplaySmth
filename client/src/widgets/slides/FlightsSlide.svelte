@@ -5,7 +5,7 @@
   import { fetchFlights, HOME_LAT, HOME_LON } from '../../lib/api.js';
 
   /** ~85 km full width; frames most of the area; tune for your site */
-  const HALF_SPAN_DEG = 0.38;
+  const HALF_SPAN_DEG = 0.09;
   const MAX_MARKERS = 40;
   const POLL_MS = 5000;
 

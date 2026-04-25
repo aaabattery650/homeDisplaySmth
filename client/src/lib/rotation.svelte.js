@@ -44,6 +44,21 @@ function schedule() {
   }, cur.duration);
 }
 
+export function nextSlide() {
+  rotation.index = (rotation.index + 1) % rotation.slides.length;
+  restartTimer();
+}
+
+export function prevSlide() {
+  rotation.index = (rotation.index - 1 + rotation.slides.length) % rotation.slides.length;
+  restartTimer();
+}
+
+function restartTimer() {
+  if (timer) clearTimeout(timer);
+  schedule();
+}
+
 export function currentSlideId() {
   return rotation.slides[rotation.index].id;
 }

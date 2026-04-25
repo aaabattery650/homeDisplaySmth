@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=homeDisplay Kiosk
+Comment=Launch homeDisplay in Chromium kiosk mode
+Exec=/home/pi/homeDisplay/deploy/kiosk.sh
+X-GNOME-Autostart-enabled=true

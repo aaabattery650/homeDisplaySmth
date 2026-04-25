@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "description": "Family information display for a Raspberry Pi 5 + 1080p monitor.",
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,magenta \"npm --prefix server run dev\" \"npm --prefix client run dev\"",
-    "build": "npm --prefix client run build",
+    "dev": "concurrently -n server,client,admin -c blue,magenta,cyan \"npm --prefix server run dev\" \"npm --prefix client run dev\" \"npm --prefix admin run dev\"",
+    "build": "npm --prefix client run build && npm --prefix admin run build",
     "start": "npm --prefix server start",
-    "install:all": "npm install && npm --prefix server install && npm --prefix client install"
+    "install:all": "npm install && npm --prefix server install && npm --prefix client install && npm --prefix admin install"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

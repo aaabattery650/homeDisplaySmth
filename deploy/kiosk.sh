@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Launch Chromium in kiosk mode pointing at the local homeDisplay server.
+# Used by the autostart desktop entry.
+
+URL="http://127.0.0.1:8787"
+DISPLAY_FLAGS=(
+  --kiosk
+  --noerrdialogs
+  --disable-infobars
+  --disable-session-crashed-bubble
+  --disable-restore-session-state
+  --disable-features=TranslateUI
+  --check-for-update-interval=31536000
+  --no-first-run
+  --start-fullscreen
+  --autoplay-policy=no-user-gesture-required
+)
+
+# Wait for the server to be ready (up to 30 seconds)
+for i in $(seq 1 30); do
+  if curl -sf "$URL/health" > /dev/null 2>&1; then
+    break
+  fi
+  echo "Waiting for server... ($i/30)"
+  sleep 1
+done
+
+# Disable screen blanking (X11)
+if command -v xset &> /dev/null; then
+  xset s off
+  xset -dpms
+  xset s noblank
+fi
+
+# Clear any Chromium crash flags from a previous unclean shutdown
+CHROMIUM_DIR="$HOME/.config/chromium/Default"
+if [ -f "$CHROMIUM_DIR/Preferences" ]; then
+  sed -i 's/"exited_cleanly":false/"exited_cleanly":true/' "$CHROMIUM_DIR/Preferences" 2>/dev/null
+  sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$CHROMIUM_DIR/Preferences" 2>/dev/null
+fi
+
+exec chromium-browser "${DISPLAY_FLAGS[@]}" "$URL"
