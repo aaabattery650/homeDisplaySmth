@@ -128,24 +128,49 @@ chmod +x "$DEPLOY_DIR/kiosk.sh"
 KIOSK_CMD="$DEPLOY_DIR/kiosk.sh"
 DESKTOP_ENV="unknown"
 
+# Detect by checking what's actually installed on disk
+# Order matters — more specific checks first
 if [[ -d "/etc/xdg/labwc" ]] || [[ -d "$HOME/.config/labwc" ]]; then
   DESKTOP_ENV="labwc"
+fi
+if [[ -f "$HOME/.config/wayfire.ini" ]]; then
+  DESKTOP_ENV="wayfire"
 fi
 if [[ -d "/etc/xdg/lxsession/LXDE-pi" ]]; then
   DESKTOP_ENV="lxde"
 fi
-# $XDG_CURRENT_DESKTOP is set at login — trust it if available
-if [[ "${XDG_CURRENT_DESKTOP:-}" == *"LXDE"* ]]; then
-  DESKTOP_ENV="lxde"
-elif [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
-  DESKTOP_ENV="labwc"
+# rpd-x = Raspberry Pi Desktop (Bookworm on Pi 3/4, uses wayfire)
+if [[ -d "/etc/xdg/lxsession/rpd-x" ]]; then
+  DESKTOP_ENV="wayfire"
 fi
 
 ok "Detected: $DESKTOP_ENV"
 
 KIOSK_INSTALLED=false
 
-# labwc / Wayland (Pi 4/5 Bookworm default)
+# wayfire (Bookworm on Pi 3/4 — "rpd-x" session)
+if [[ "$DESKTOP_ENV" == "wayfire" ]]; then
+  WAYFIRE_CONF="$HOME/.config/wayfire.ini"
+  if [[ -f "$WAYFIRE_CONF" ]] && grep -qF "$KIOSK_CMD" "$WAYFIRE_CONF"; then
+    skip "wayfire autostart entry"
+  else
+    if [[ -f "$WAYFIRE_CONF" ]] && grep -q "\[autostart\]" "$WAYFIRE_CONF"; then
+      # Append under existing [autostart] section
+      sed -i "/^\[autostart\]/a homedisplay = $KIOSK_CMD" "$WAYFIRE_CONF"
+    else
+      # Add new [autostart] section
+      cat >> "$WAYFIRE_CONF" <<EOF
+
+[autostart]
+homedisplay = $KIOSK_CMD
+EOF
+    fi
+    ok "wayfire autostart entry added"
+  fi
+  KIOSK_INSTALLED=true
+fi
+
+# labwc / Wayland (Pi 5 Bookworm default)
 if [[ "$DESKTOP_ENV" == "labwc" ]]; then
   LABWC_DIR="$HOME/.config/labwc"
   LABWC_AUTOSTART="$LABWC_DIR/autostart"
@@ -159,12 +184,11 @@ if [[ "$DESKTOP_ENV" == "labwc" ]]; then
   KIOSK_INSTALLED=true
 fi
 
-# LXDE / X11 (Pi 3, or older Pi OS)
+# LXDE / X11 (Bullseye and older)
 if [[ "$DESKTOP_ENV" == "lxde" ]]; then
   LXDE_AUTOSTART_DIR="$HOME/.config/lxsession/LXDE-pi"
   LXDE_AUTOSTART="$LXDE_AUTOSTART_DIR/autostart"
   mkdir -p "$LXDE_AUTOSTART_DIR"
-  # Seed from system default if user copy doesn't exist yet
   if [[ ! -f "$LXDE_AUTOSTART" ]] && [[ -f "/etc/xdg/lxsession/LXDE-pi/autostart" ]]; then
     cp /etc/xdg/lxsession/LXDE-pi/autostart "$LXDE_AUTOSTART"
   fi
@@ -177,7 +201,7 @@ if [[ "$DESKTOP_ENV" == "lxde" ]]; then
   KIOSK_INSTALLED=true
 fi
 
-# XDG .desktop fallback
+# XDG .desktop fallback (works on some setups)
 mkdir -p "$HOME/.config/autostart"
 DESKTOP_TMP="$(mktemp)"
 sed "s|Exec=/home/pi/homeDisplay/deploy/kiosk.sh|Exec=$KIOSK_CMD|" \
@@ -192,7 +216,6 @@ else
   rm "$DESKTOP_TMP"
   ok "XDG autostart desktop entry installed"
 fi
-KIOSK_INSTALLED=true
 
 if ! $KIOSK_INSTALLED; then
   warn "Could not detect desktop environment — kiosk autostart may not work. Set it up manually."
@@ -201,53 +224,94 @@ fi
 # ── 6. Screen-blanking prevention ──────────────────────────────────────────
 info "Checking screen blanking"
 
-# X11 / LXDE
-LXDE_DIR="/etc/xdg/lxsession/LXDE-pi"
-if [[ -d "$LXDE_DIR" ]]; then
-  if ! diff -q "$DEPLOY_DIR/no-blank.conf" "$LXDE_DIR/no-blank.conf" &>/dev/null 2>&1; then
-    sudo cp "$DEPLOY_DIR/no-blank.conf" "$LXDE_DIR/"
-    ok "LXDE no-blank config installed"
-  else
-    skip "LXDE no-blank config"
+if [[ "$DESKTOP_ENV" == "lxde" ]]; then
+  LXDE_DIR="/etc/xdg/lxsession/LXDE-pi"
+  if [[ -d "$LXDE_DIR" ]]; then
+    if ! diff -q "$DEPLOY_DIR/no-blank.conf" "$LXDE_DIR/no-blank.conf" &>/dev/null 2>&1; then
+      sudo cp "$DEPLOY_DIR/no-blank.conf" "$LXDE_DIR/"
+      ok "LXDE no-blank config installed"
+    else
+      skip "LXDE no-blank config"
+    fi
   fi
 fi
 
-# Wayland / labwc (Bookworm default)
-WAYFIRE_CONF="$HOME/.config/wayfire.ini"
-if [[ -f "$WAYFIRE_CONF" ]]; then
-  if ! grep -q "\[idle\]" "$WAYFIRE_CONF"; then
-    cat >> "$WAYFIRE_CONF" <<'EOF'
+if [[ "$DESKTOP_ENV" == "wayfire" || "$DESKTOP_ENV" == "labwc" ]]; then
+  WAYFIRE_CONF="$HOME/.config/wayfire.ini"
+  if [[ -f "$WAYFIRE_CONF" ]]; then
+    if grep -q "\[idle\]" "$WAYFIRE_CONF"; then
+      # Update existing idle section to disable timeouts
+      sed -i 's/^dpms_timeout=.*/dpms_timeout=0/' "$WAYFIRE_CONF"
+      sed -i 's/^screensaver_timeout=.*/screensaver_timeout=0/' "$WAYFIRE_CONF"
+      skip "Wayland idle config (verified)"
+    else
+      cat >> "$WAYFIRE_CONF" <<'EOF'
 
 [idle]
 dpms_timeout=0
 screensaver_timeout=0
 EOF
-    ok "Wayland idle timeouts disabled"
-  else
-    skip "Wayland idle config"
+      ok "Wayland idle timeouts disabled"
+    fi
   fi
 fi
 
 # ── 7. Display rotation (180°) ────────────────────────────────────────────
 info "Checking display rotation"
 
-# Bookworm uses /boot/firmware/config.txt; older images use /boot/config.txt
-BOOT_CFG="/boot/firmware/config.txt"
-if [[ ! -f "$BOOT_CFG" ]]; then
-  BOOT_CFG="/boot/config.txt"
-fi
-
-if [[ -f "$BOOT_CFG" ]]; then
-  if grep -q "^display_hdmi_rotate=2" "$BOOT_CFG"; then
-    skip "Display rotation (180°)"
+if [[ "$DESKTOP_ENV" == "wayfire" ]]; then
+  # KMS driver ignores display_hdmi_rotate — use wayfire output transform
+  WAYFIRE_CONF="$HOME/.config/wayfire.ini"
+  if [[ -f "$WAYFIRE_CONF" ]] && grep -q "transform = 180" "$WAYFIRE_CONF"; then
+    skip "Display rotation (180° via wayfire)"
   else
-    # Remove any existing rotation line before adding ours
-    sudo sed -i '/^display_hdmi_rotate=/d' "$BOOT_CFG"
-    echo "display_hdmi_rotate=2" | sudo tee -a "$BOOT_CFG" >/dev/null
-    ok "Display rotated 180° (takes effect after reboot)"
+    # Detect the HDMI output name (usually HDMI-A-1 or HDMI-A-2)
+    HDMI_OUTPUT="HDMI-A-1"
+    if command -v wlr-randr &>/dev/null; then
+      DETECTED="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
+      if [[ -n "$DETECTED" ]]; then
+        HDMI_OUTPUT="$DETECTED"
+      fi
+    fi
+    if grep -q "\[output:$HDMI_OUTPUT\]" "$WAYFIRE_CONF" 2>/dev/null; then
+      sed -i "/^\[output:$HDMI_OUTPUT\]/a transform = 180" "$WAYFIRE_CONF"
+    else
+      cat >> "$WAYFIRE_CONF" <<EOF
+
+[output:$HDMI_OUTPUT]
+transform = 180
+EOF
+    fi
+    ok "Display rotated 180° via wayfire (output: $HDMI_OUTPUT)"
   fi
+
+elif [[ "$DESKTOP_ENV" == "lxde" ]]; then
+  # X11: use xrandr in autostart
+  LXDE_AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
+  if [[ -f "$LXDE_AUTOSTART" ]] && grep -qF "xrandr --output" "$LXDE_AUTOSTART"; then
+    skip "Display rotation (180° via xrandr)"
+  else
+    echo "@xrandr --output HDMI-1 --rotate inverted" >> "$LXDE_AUTOSTART"
+    ok "Display rotated 180° via xrandr"
+  fi
+
 else
-  warn "Boot config not found — add 'display_hdmi_rotate=2' manually"
+  # Fallback: firmware-level rotation (only works without KMS)
+  BOOT_CFG="/boot/firmware/config.txt"
+  if [[ ! -f "$BOOT_CFG" ]]; then
+    BOOT_CFG="/boot/config.txt"
+  fi
+  if [[ -f "$BOOT_CFG" ]]; then
+    if grep -q "^display_hdmi_rotate=2" "$BOOT_CFG"; then
+      skip "Display rotation (180°)"
+    else
+      sudo sed -i '/^display_hdmi_rotate=/d' "$BOOT_CFG"
+      echo "display_hdmi_rotate=2" | sudo tee -a "$BOOT_CFG" >/dev/null
+      ok "Display rotated 180° (firmware, takes effect after reboot)"
+    fi
+  else
+    warn "Could not configure display rotation"
+  fi
 fi
 
 # ── 8. Desktop auto-login ──────────────────────────────────────────────────
