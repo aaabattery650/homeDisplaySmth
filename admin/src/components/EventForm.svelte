@@ -156,7 +156,7 @@
       </div>
 
       <div class="field">
-        <label id="color-label">Color</label>
+        <span id="color-label" class="field-label">Color</span>
         <div class="color-swatches" aria-labelledby="color-label">
           {#each COLORS as c}
             <button
@@ -226,7 +226,7 @@
     flex-direction: column;
     gap: 4px;
   }
-  .field label {
+  .field label, .field-label {
     font-size: 0.8125rem;
     font-weight: 500;
     color: var(--text-secondary);
