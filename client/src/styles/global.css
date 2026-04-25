@@ -21,9 +21,16 @@ body {
   font-size: var(--fs-body);
   color: var(--text-primary);
   background:
-    radial-gradient(1400px 900px at 80% -10%, #16294f 0%, transparent 60%),
-    radial-gradient(1100px 700px at 5% 110%, #0a1838 0%, transparent 55%),
-    linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 100%);
+    radial-gradient(1400px 900px at 80% -10%, var(--sky-accent-1) 0%, transparent 60%),
+    radial-gradient(1100px 700px at 5% 110%, var(--sky-accent-2) 0%, transparent 55%),
+    linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 100%);
+  /* Cross-fade weather palettes. Only works because the four sky vars are
+     registered as @property <color> (see tokens.css). */
+  transition:
+    --sky-top 1500ms var(--ease-soft),
+    --sky-bottom 1500ms var(--ease-soft),
+    --sky-accent-1 1500ms var(--ease-soft),
+    --sky-accent-2 1500ms var(--ease-soft);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

@@ -1,6 +1,31 @@
+/* Sky palette is dynamic — JS swaps these via document.body.style.setProperty
+   on weather/day-night change. Registering them as @property lets the body
+   transition between gradients smoothly (plain CSS variables can't animate
+   inside a gradient). Initial values are "clear night." */
+@property --sky-top {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #07101f;
+}
+@property --sky-bottom {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: #0c1830;
+}
+@property --sky-accent-1 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(40, 60, 110, 0.55);
+}
+@property --sky-accent-2 {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: rgba(20, 35, 72, 0.55);
+}
+
 :root {
-  /* Palette — cool, ambient, slightly muted. Designed for a wall display
-     viewed from across a room, low-eye-strain at night. */
+  /* Legacy named anchors — referenced as fallbacks; live colors come from
+     the @property-registered --sky-* vars above. */
   --bg-deep: #07101f;
   --bg-mid: #0c1830;
   --bg-soft: #142244;

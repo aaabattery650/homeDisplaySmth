@@ -12,12 +12,12 @@ const KINDS = {
   clear: {
     particles: null,
     clouds: { opacity: 0.05, speed: 6, tint: 0xffffff },
-    sun:    { intensity: 1.0, x: 0.18, y: 0.22 },
+    sun:    { intensity: 1.0, x: 0.17, y: 0.30 },
   },
   partly_cloudy: {
     particles: null,
     clouds: { opacity: 0.22, speed: 8, tint: 0xffffff },
-    sun:    { intensity: 0.6, x: 0.18, y: 0.22 },
+    sun:    { intensity: 0.65, x: 0.17, y: 0.30 },
   },
   overcast: {
     particles: null,
@@ -81,6 +81,7 @@ export class WeatherFx {
     this.app = new Application();
     this.kind = 'clear';
     this.dimmed = false;
+    this.isDay = true;
 
     this.particles = [];
     this._spawnAccumulator = 0;
@@ -129,6 +130,10 @@ export class WeatherFx {
 
   setDimmed(d) {
     this.dimmed = !!d;
+  }
+
+  setIsDay(isDay) {
+    this.isDay = !!isDay;
   }
 
   _config() {
@@ -182,7 +187,9 @@ export class WeatherFx {
 
   _updateSun(dt) {
     const cfg = this._config().sun;
-    const target = cfg ? cfg.intensity * (this.dimmed ? 0.4 : 1) : 0;
+    // Sun is hidden at night even on a clear sky — the palette swap to the
+    // night gradient does the visual work; a sun in the night sky would be wrong.
+    const target = (cfg && this.isDay) ? cfg.intensity * (this.dimmed ? 0.4 : 1) : 0;
     this.sun.alpha += (target - this.sun.alpha) * Math.min(1, dt * 0.7);
 
     if (cfg) {

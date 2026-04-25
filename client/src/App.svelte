@@ -7,6 +7,7 @@
   import FlightsSlide from './widgets/slides/FlightsSlide.svelte';
   import { rotation, startRotation, stopRotation } from './lib/rotation.svelte.js';
   import { WeatherFx } from './lib/weatherFx/WeatherFx.js';
+  import { applyPalette } from './lib/palettes.js';
 
   let bgEl;
   let fx;
@@ -36,9 +37,26 @@
     return ALIASES[raw] ?? raw;
   }
 
+  // ?day=1 / ?day=0 forces day vs night palette without waiting for sundown.
+  function dayOverride() {
+    const p = new URLSearchParams(location.search);
+    if (!p.has('day')) return null;
+    const v = p.get('day');
+    if (v === '1' || v === 'true' || v === 'yes' || v === '') return true;
+    if (v === '0' || v === 'false' || v === 'no') return false;
+    return null;
+  }
+
+  function applyState(kind, isDay) {
+    fx?.setWeather(kind);
+    fx?.setIsDay(isDay);
+    applyPalette(kind, isDay);
+  }
+
   function onWeather(data) {
-    const override = devOverride();
-    fx?.setWeather(override ?? data?.condition?.kind ?? 'clear');
+    const kind = devOverride() ?? data?.condition?.kind ?? 'clear';
+    const isDay = dayOverride() ?? data?.isDay ?? true;
+    applyState(kind, isDay);
   }
 
   onMount(async () => {
