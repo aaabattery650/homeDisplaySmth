@@ -120,12 +120,12 @@
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 0;
   }
   .launch {
     display: flex;
-    gap: 22px;
-    padding: 18px 0;
+    gap: 16px;
+    padding: 10px 0;
     border-top: 1px solid var(--surface-border);
     align-items: center;
   }
@@ -133,9 +133,9 @@
 
   .img-wrap {
     flex-shrink: 0;
-    width: 110px;
-    height: 110px;
-    border-radius: 12px;
+    width: 72px;
+    height: 72px;
+    border-radius: 10px;
     overflow: hidden;
     background: rgba(255, 255, 255, 0.05);
   }
@@ -150,7 +150,7 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
   }
   .top-row {
     display: flex;
@@ -171,7 +171,7 @@
   }
   .countdown {
     font-family: var(--font-mono);
-    font-size: var(--fs-medium);
+    font-size: var(--fs-body);
     color: var(--accent-cool);
     font-weight: 500;
   }
@@ -184,7 +184,7 @@
     opacity: 0.7;
   }
   .rocket-name {
-    font-size: var(--fs-large);
+    font-size: var(--fs-medium);
     font-weight: 500;
     color: var(--text-primary);
     white-space: nowrap;
@@ -192,7 +192,7 @@
     text-overflow: ellipsis;
   }
   .mission {
-    font-size: var(--fs-body);
+    font-size: var(--fs-small);
     color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
@@ -201,8 +201,8 @@
   .meta {
     display: flex;
     gap: 8px;
-    font-size: var(--fs-body);
-    color: var(--text-secondary);
+    font-size: var(--fs-small);
+    color: var(--text-tertiary);
   }
   .dot { color: var(--text-tertiary); opacity: 0.5; }
   .err, .loading {

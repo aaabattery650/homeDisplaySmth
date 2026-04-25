@@ -65,6 +65,7 @@
             class="cell"
             class:today={isToday(day)}
             onclick={() => handleSlotClick(day, hour)}
+            aria-label="{day} {formatHour(hour)}"
           ></button>
         {/each}
       </div>

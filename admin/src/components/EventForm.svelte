@@ -156,8 +156,8 @@
       </div>
 
       <div class="field">
-        <label>Color</label>
-        <div class="color-swatches">
+        <label id="color-label">Color</label>
+        <div class="color-swatches" aria-labelledby="color-label">
           {#each COLORS as c}
             <button
               type="button"
@@ -165,6 +165,7 @@
               class:active={color === c}
               style="background: {c};"
               onclick={() => (color = c)}
+              aria-label="Color {c}"
             ></button>
           {/each}
         </div>
