@@ -122,15 +122,33 @@ else
 fi
 
 # ── 5. Kiosk autostart ─────────────────────────────────────────────────────
-info "Checking kiosk autostart"
+info "Detecting desktop environment"
 chmod +x "$DEPLOY_DIR/kiosk.sh"
 
 KIOSK_CMD="$DEPLOY_DIR/kiosk.sh"
+DESKTOP_ENV="unknown"
 
-# labwc / Wayland (Bookworm default) — uses ~/.config/labwc/autostart
-LABWC_DIR="$HOME/.config/labwc"
-LABWC_AUTOSTART="$LABWC_DIR/autostart"
-if [[ -d "$LABWC_DIR" ]] || [[ -d "/etc/xdg/labwc" ]]; then
+if [[ -d "/etc/xdg/labwc" ]] || [[ -d "$HOME/.config/labwc" ]]; then
+  DESKTOP_ENV="labwc"
+fi
+if [[ -d "/etc/xdg/lxsession/LXDE-pi" ]]; then
+  DESKTOP_ENV="lxde"
+fi
+# $XDG_CURRENT_DESKTOP is set at login — trust it if available
+if [[ "${XDG_CURRENT_DESKTOP:-}" == *"LXDE"* ]]; then
+  DESKTOP_ENV="lxde"
+elif [[ "${XDG_SESSION_TYPE:-}" == "wayland" ]]; then
+  DESKTOP_ENV="labwc"
+fi
+
+ok "Detected: $DESKTOP_ENV"
+
+KIOSK_INSTALLED=false
+
+# labwc / Wayland (Pi 4/5 Bookworm default)
+if [[ "$DESKTOP_ENV" == "labwc" ]]; then
+  LABWC_DIR="$HOME/.config/labwc"
+  LABWC_AUTOSTART="$LABWC_DIR/autostart"
   mkdir -p "$LABWC_DIR"
   if [[ -f "$LABWC_AUTOSTART" ]] && grep -qF "$KIOSK_CMD" "$LABWC_AUTOSTART"; then
     skip "labwc autostart entry"
@@ -138,11 +156,29 @@ if [[ -d "$LABWC_DIR" ]] || [[ -d "/etc/xdg/labwc" ]]; then
     echo "$KIOSK_CMD &" >> "$LABWC_AUTOSTART"
     ok "labwc autostart entry added"
   fi
+  KIOSK_INSTALLED=true
 fi
 
-# LXDE / X11 (older Pi OS) — uses ~/.config/autostart/*.desktop
-mkdir -p "$HOME/.config/autostart"
+# LXDE / X11 (Pi 3, or older Pi OS)
+if [[ "$DESKTOP_ENV" == "lxde" ]]; then
+  LXDE_AUTOSTART_DIR="$HOME/.config/lxsession/LXDE-pi"
+  LXDE_AUTOSTART="$LXDE_AUTOSTART_DIR/autostart"
+  mkdir -p "$LXDE_AUTOSTART_DIR"
+  # Seed from system default if user copy doesn't exist yet
+  if [[ ! -f "$LXDE_AUTOSTART" ]] && [[ -f "/etc/xdg/lxsession/LXDE-pi/autostart" ]]; then
+    cp /etc/xdg/lxsession/LXDE-pi/autostart "$LXDE_AUTOSTART"
+  fi
+  if grep -qF "$KIOSK_CMD" "$LXDE_AUTOSTART" 2>/dev/null; then
+    skip "LXDE autostart entry"
+  else
+    echo "@$KIOSK_CMD" >> "$LXDE_AUTOSTART"
+    ok "LXDE autostart entry added"
+  fi
+  KIOSK_INSTALLED=true
+fi
 
+# XDG .desktop fallback
+mkdir -p "$HOME/.config/autostart"
 DESKTOP_TMP="$(mktemp)"
 sed "s|Exec=/home/pi/homeDisplay/deploy/kiosk.sh|Exec=$KIOSK_CMD|" \
   "$DEPLOY_DIR/homedisplay-kiosk.desktop" > "$DESKTOP_TMP"
@@ -155,6 +191,11 @@ else
   cp "$DESKTOP_TMP" "$DESKTOP_DEST"
   rm "$DESKTOP_TMP"
   ok "XDG autostart desktop entry installed"
+fi
+KIOSK_INSTALLED=true
+
+if ! $KIOSK_INSTALLED; then
+  warn "Could not detect desktop environment — kiosk autostart may not work. Set it up manually."
 fi
 
 # ── 6. Screen-blanking prevention ──────────────────────────────────────────
