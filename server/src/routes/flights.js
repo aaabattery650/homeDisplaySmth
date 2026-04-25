@@ -128,6 +128,54 @@ function normalizeAircraft(raw) {
   return out;
 }
 
+// Fetch callsigns from FR24's flights.json (field[16]) and merge into aircraft by hex.
+// FR24 enriches callsigns server-side even when ADS-B doesn't carry them.
+async function enrichCallsignsFromFR24(aircraft, app) {
+  const fr24Url = (process.env.FLIGHTS_FR24_URL || '').trim();
+  if (!fr24Url) {
+    // Auto-derive from FLIGHTS_DATA_URL if it points to dump1090 on the same host
+    const dataUrl = (process.env.FLIGHTS_DATA_URL || '').trim();
+    const match = dataUrl.match(/^(https?:\/\/[^/]+)/);
+    if (!match) return;
+    const baseHost = match[1].replace(/:80(\/|$)/, '$1');
+    const fr24 = `${baseHost}:8754/flights.json`;
+    try {
+      const res = await fetch(fr24, { signal: AbortSignal.timeout(3000), headers: { accept: 'application/json' } });
+      if (!res.ok) return;
+      const data = await res.json();
+      applyFR24Callsigns(aircraft, data);
+    } catch {
+      // FR24 port may not be available — silently skip
+    }
+    return;
+  }
+  try {
+    const res = await fetch(fr24Url, { signal: AbortSignal.timeout(3000), headers: { accept: 'application/json' } });
+    if (!res.ok) return;
+    const data = await res.json();
+    applyFR24Callsigns(aircraft, data);
+  } catch {
+    // non-fatal
+  }
+}
+
+function applyFR24Callsigns(aircraft, fr24Data) {
+  if (!fr24Data || typeof fr24Data !== 'object') return;
+  const callsignMap = new Map();
+  for (const [hex, arr] of Object.entries(fr24Data)) {
+    if (!Array.isArray(arr) || arr.length < 17) continue;
+    const cs = arr[16] != null ? String(arr[16]).trim() : '';
+    if (cs) callsignMap.set(hex.toLowerCase(), cs);
+  }
+  for (const ac of aircraft) {
+    if (!ac.hex) continue;
+    const cs = callsignMap.get(ac.hex.toLowerCase());
+    if (cs && (!ac.callsign || ac.callsign === ac.hex)) {
+      ac.callsign = cs;
+    }
+  }
+}
+
 async function getLocalAircraft(url, app) {
   try {
     const res = await fetch(url, {
@@ -142,8 +190,14 @@ async function getLocalAircraft(url, app) {
     const list = extractAircraftList(data);
     const aircraft = normalizeLocalAircraft(list);
 
-    // Enrich with OpenSky metadata (type, country) — non-blocking, best-effort
     if (aircraft.length > 0) {
+      // Enrich callsigns from FR24 (has server-side callsign resolution)
+      try {
+        await enrichCallsignsFromFR24(aircraft, app);
+      } catch (err) {
+        app.log.warn({ err }, 'FR24 callsign enrichment failed (non-fatal)');
+      }
+      // Enrich with OpenSky metadata (type, country)
       try {
         await enrichFromOpenSky(aircraft, app.log);
       } catch (err) {

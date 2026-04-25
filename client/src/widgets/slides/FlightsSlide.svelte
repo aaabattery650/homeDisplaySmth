@@ -115,8 +115,8 @@
           <tbody>
             {#each rows.slice(0, 10) as ac}
               <tr class:local={ac.localAntenna}>
-                <td class="callsign">
-                  {ac.callsign}
+                <td class="callsign" class:hex-only={ac.callsign === ac.hex}>
+                  {ac.callsign === ac.hex ? `#${ac.hex}` : ac.callsign}
                   {#if ac.localAntenna}<span class="antenna-badge" title="Local antenna">📡</span>{/if}
                 </td>
                 <td class="origin">{fmtCountry(ac.originCountry)}</td>
@@ -212,6 +212,11 @@
     font-family: var(--font-mono);
     font-size: var(--fs-small);
     color: var(--text-secondary);
+  }
+
+  .callsign.hex-only {
+    color: var(--text-tertiary);
+    font-size: var(--fs-body);
   }
 
   .antenna-badge {
