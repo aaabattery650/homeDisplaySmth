@@ -29,6 +29,7 @@ function shape(raw) {
   return (raw.results ?? []).map((l) => ({
     name: l.name,
     provider: l.launch_service_provider?.name ?? 'Unknown',
+    providerCountryCode: l.launch_service_provider?.country_code ?? null,
     providerType: l.launch_service_provider?.type ?? null,
     rocket: l.rocket?.configuration?.full_name ?? l.rocket?.configuration?.name ?? null,
     mission: l.mission?.name ?? null,

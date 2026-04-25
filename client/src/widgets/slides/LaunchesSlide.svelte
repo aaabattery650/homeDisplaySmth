@@ -84,7 +84,7 @@
     <div class="loading">Loading…</div>
   {:else}
     <ul class="launches">
-      {#each launches.slice(0, 3) as l}
+      {#each launches.slice(0, 5) as l}
         {@const cd = countdown(l.net)}
         <li class="launch">
           {#if l.image}
@@ -94,7 +94,7 @@
           {/if}
           <div class="info">
             <div class="top-row">
-              <span class="provider">{shortProvider(l.provider)}</span>
+              <span class="provider">{shortProvider(l.provider)}{#if l.providerCountryCode} <span class="country">{l.providerCountryCode}</span>{/if}</span>
               <span class="countdown tabular" class:urgent={cd.urgent} class:past={cd.past}>
                 {cd.text}
               </span>
@@ -163,6 +163,11 @@
     letter-spacing: 0.16em;
     color: var(--accent-warm);
     font-weight: 600;
+  }
+  .country {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    letter-spacing: 0.08em;
   }
   .countdown {
     font-family: var(--font-mono);
