@@ -30,23 +30,23 @@ const KINDS = {
     sun:    null,
   },
   drizzle: {
-    particles: { type: 'streak', rate: 30, vy: 480, vx: -25, len: 9, color: 0x9ec6ff, alpha: 0.45, width: 1.0 },
+    particles: { type: 'streak', rate: 12, vy: 480, vx: -25, len: 9, color: 0x9ec6ff, alpha: 0.45, width: 1.0 },
     clouds:   { opacity: 0.35, speed: 9, tint: 0xb8c4d8 },
     sun:      null,
   },
   rain: {
-    particles: { type: 'streak', rate: 110, vy: 720, vx: -55, len: 14, color: 0x9ec6ff, alpha: 0.55, width: 1.4 },
+    particles: { type: 'streak', rate: 35, vy: 720, vx: -55, len: 14, color: 0x9ec6ff, alpha: 0.55, width: 1.4 },
     clouds:   { opacity: 0.45, speed: 11, tint: 0xa8b6cd },
     sun:      null,
   },
   thunderstorm: {
-    particles: { type: 'streak', rate: 280, vy: 950, vx: -90, len: 22, color: 0xb8d3ff, alpha: 0.70, width: 1.8 },
+    particles: { type: 'streak', rate: 70, vy: 950, vx: -90, len: 22, color: 0xb8d3ff, alpha: 0.70, width: 1.8 },
     clouds:   { opacity: 0.6, speed: 14, tint: 0x8a96b0 },
     sun:      null,
     lightning: true,
   },
   snow: {
-    particles: { type: 'flake', rate: 50, vy: 60, vx: -10, color: 0xffffff, alpha: 0.85 },
+    particles: { type: 'flake', rate: 18, vy: 60, vx: -10, color: 0xffffff, alpha: 0.85 },
     clouds:   { opacity: 0.4, speed: 5, tint: 0xd6dde8 },
     sun:      null,
   },
@@ -54,7 +54,7 @@ const KINDS = {
 
 const GRAVITY = 950;
 const SPLASH_LIFE = 0.45;
-const SPLASH_COUNT = 5;
+const SPLASH_COUNT = 2;
 const SPLASH_COLOR = 0xc0dcff;
 const FLAKE_FADE = 0.30; // seconds for a flake to fade out after impact
 
@@ -67,7 +67,7 @@ const STRIKE_INTERVAL_MAX = 14;
 const THUNDER_DELAY_MIN = 1.2;
 const THUNDER_DELAY_MAX = 3.8;
 
-const CLOUD_COUNT = 8;
+const CLOUD_COUNT = 4;
 
 export class WeatherFx {
   /**
@@ -99,9 +99,9 @@ export class WeatherFx {
     await this.app.init({
       resizeTo: this.mountEl,
       backgroundAlpha: 0,
-      antialias: true,
+      antialias: false,
       autoDensity: true,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      resolution: 1,
     });
     this.mountEl.appendChild(this.app.canvas);
 
@@ -147,7 +147,7 @@ export class WeatherFx {
     // Rays sit *behind* the disk — long thin streaks radiating outward, blurred
     // soft. The whole rays container slowly rotates so the sun feels alive.
     const rays = new Container();
-    const rayCount = 12;
+    const rayCount = 8;
     for (let i = 0; i < rayCount; i++) {
       const angle = (i / rayCount) * Math.PI * 2;
       const long = i % 2 === 0;
@@ -159,7 +159,7 @@ export class WeatherFx {
       ray.rotation = angle;
       rays.addChild(ray);
     }
-    rays.filters = [new BlurFilter({ strength: 8, quality: 4 })];
+    rays.filters = [new BlurFilter({ strength: 6, quality: 1 })];
     this.sunRays = rays;
     sun.addChild(rays);
 
@@ -167,13 +167,10 @@ export class WeatherFx {
     // inner layers ramp to a crisp white core. The defined core is what makes
     // it read as a *sun* rather than a vague glow.
     const layers = [
-      { r: 420, color: 0xffa850, alpha: 0.04 },  // far warm haze
-      { r: 300, color: 0xffc070, alpha: 0.09 },
-      { r: 200, color: 0xffd488, alpha: 0.16 },
-      { r: 130, color: 0xffe2a8, alpha: 0.28 },
-      { r:  85, color: 0xfff0c8, alpha: 0.50 },
+      { r: 300, color: 0xffc070, alpha: 0.10 },
+      { r: 130, color: 0xffe2a8, alpha: 0.30 },
       { r:  55, color: 0xfff8e8, alpha: 0.78 },
-      { r:  34, color: 0xffffff, alpha: 1.00 },  // crisp white core
+      { r:  34, color: 0xffffff, alpha: 1.00 },
     ];
     for (const l of layers) {
       const g = new Graphics().circle(0, 0, l.r).fill({ color: l.color, alpha: l.alpha });
@@ -484,7 +481,7 @@ export class WeatherFx {
 // per-lobe alpha — so transitions stay smooth.
 function makeCloud() {
   const c = new Container();
-  const lobes = 7 + Math.floor(Math.random() * 5);
+  const lobes = 4 + Math.floor(Math.random() * 3);
   const baseR = 40 + Math.random() * 35;
   const spread = 130 + Math.random() * 120;
 
@@ -498,7 +495,7 @@ function makeCloud() {
     c.addChild(lobe);
   }
 
-  c.filters = [new BlurFilter({ strength: 18, quality: 4 })];
+  c.filters = [new BlurFilter({ strength: 10, quality: 1 })];
 
   return {
     container: c,

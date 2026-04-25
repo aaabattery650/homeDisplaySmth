@@ -141,7 +141,7 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: 1fr 380px;
+    grid-template-columns: 1fr 285px;
     gap: 24px;
   }
 
@@ -153,8 +153,8 @@
   }
 
   .map-side {
-    height: 380px;
-    width: 380px;
+    height: 285px;
+    width: 285px;
     align-self: start;
     border-radius: var(--radius-card, 16px);
     overflow: hidden;

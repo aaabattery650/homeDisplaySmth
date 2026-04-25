@@ -193,7 +193,7 @@
     justify-content: center;
     opacity: 0.4;
     transition: opacity 200ms ease, background 200ms ease;
-    backdrop-filter: blur(6px);
+    backdrop-filter: blur(3px);
   }
   .nav:hover {
     opacity: 1;
