@@ -344,6 +344,19 @@ else
   warn "raspi-config not found — set desktop auto-login manually"
 fi
 
+# ── 9. Disable GNOME Keyring prompt ────────────────────────────────────────
+# Chromium triggers a keyring unlock dialog on auto-login. Removing the
+# default keyring file prevents the popup; the --password-store=basic flag
+# in kiosk.sh ensures Chromium never asks for one again.
+info "Checking GNOME Keyring"
+KEYRING_DIR="$HOME/.local/share/keyrings"
+if [[ -f "$KEYRING_DIR/Default_keyring.keyring" ]] || [[ -f "$KEYRING_DIR/default" ]]; then
+  rm -f "$KEYRING_DIR/Default_keyring.keyring" "$KEYRING_DIR/default"
+  ok "Removed default keyring (no more unlock popup)"
+else
+  skip "GNOME Keyring (already clean)"
+fi
+
 # ── Done ────────────────────────────────────────────────────────────────────
 echo ""
 info "Setup complete! Reboot to start the kiosk:"

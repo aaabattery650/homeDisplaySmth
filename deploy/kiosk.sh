@@ -24,6 +24,7 @@ DISPLAY_FLAGS=(
   --disable-smooth-scrolling
   --disable-low-end-device-mode
   --enable-accelerated-video-decode
+  --password-store=basic
 )
 
 # Wait for the server to be ready (up to 30 seconds)
