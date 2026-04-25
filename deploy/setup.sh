@@ -79,15 +79,28 @@ fi
 CURR_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
 BUILD_MARKER="$REPO_DIR/client/dist/.build-commit"
 LAST_BUILD="$(cat "$BUILD_MARKER" 2>/dev/null || echo "")"
+NEED_RESTART=false
 
-info "Installing npm dependencies"
-npm run install:all
-ok "Dependencies installed"
+# Only run npm install if lock files changed or node_modules missing
+LOCK_HASH="$(cat "$REPO_DIR/package-lock.json" "$REPO_DIR/server/package-lock.json" "$REPO_DIR/client/package-lock.json" "$REPO_DIR/admin/package-lock.json" 2>/dev/null | md5sum | cut -d' ' -f1)"
+LOCK_MARKER="$REPO_DIR/node_modules/.lock-hash"
+LAST_LOCK="$(cat "$LOCK_MARKER" 2>/dev/null || echo "")"
+
+if [[ "$LOCK_HASH" != "$LAST_LOCK" ]] || [[ ! -d "$REPO_DIR/node_modules" ]]; then
+  info "Installing npm dependencies"
+  npm run install:all
+  mkdir -p "$REPO_DIR/node_modules"
+  echo "$LOCK_HASH" > "$LOCK_MARKER"
+  ok "Dependencies installed"
+else
+  skip "npm dependencies (lock files unchanged)"
+fi
 
 if [[ "$CURR_HEAD" != "$LAST_BUILD" ]]; then
   info "Building frontend (source changed)"
   npm run build
   echo "$CURR_HEAD" > "$BUILD_MARKER"
+  NEED_RESTART=true
   ok "Client and admin built"
 else
   skip "Frontend build (already at $CURR_HEAD)"
@@ -132,8 +145,11 @@ fi
 if ! systemctl is-active "$SERVICE_NAME" &>/dev/null; then
   sudo systemctl start "$SERVICE_NAME"
   ok "Service started"
+elif $NEED_RESTART; then
+  sudo systemctl restart "$SERVICE_NAME"
+  ok "Service restarted (new build)"
 else
-  skip "Service (already running)"
+  skip "Service (already running, no changes)"
 fi
 
 # ── 5. Kiosk autostart ─────────────────────────────────────────────────────
