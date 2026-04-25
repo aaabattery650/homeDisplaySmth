@@ -125,20 +125,36 @@ fi
 info "Checking kiosk autostart"
 chmod +x "$DEPLOY_DIR/kiosk.sh"
 
+KIOSK_CMD="$DEPLOY_DIR/kiosk.sh"
+
+# labwc / Wayland (Bookworm default) — uses ~/.config/labwc/autostart
+LABWC_DIR="$HOME/.config/labwc"
+LABWC_AUTOSTART="$LABWC_DIR/autostart"
+if [[ -d "$LABWC_DIR" ]] || [[ -d "/etc/xdg/labwc" ]]; then
+  mkdir -p "$LABWC_DIR"
+  if [[ -f "$LABWC_AUTOSTART" ]] && grep -qF "$KIOSK_CMD" "$LABWC_AUTOSTART"; then
+    skip "labwc autostart entry"
+  else
+    echo "$KIOSK_CMD &" >> "$LABWC_AUTOSTART"
+    ok "labwc autostart entry added"
+  fi
+fi
+
+# LXDE / X11 (older Pi OS) — uses ~/.config/autostart/*.desktop
 mkdir -p "$HOME/.config/autostart"
 
 DESKTOP_TMP="$(mktemp)"
-sed "s|Exec=/home/pi/homeDisplay/deploy/kiosk.sh|Exec=$DEPLOY_DIR/kiosk.sh|" \
+sed "s|Exec=/home/pi/homeDisplay/deploy/kiosk.sh|Exec=$KIOSK_CMD|" \
   "$DEPLOY_DIR/homedisplay-kiosk.desktop" > "$DESKTOP_TMP"
 
 DESKTOP_DEST="$HOME/.config/autostart/homedisplay-kiosk.desktop"
 if [[ -f "$DESKTOP_DEST" ]] && diff -q "$DESKTOP_TMP" "$DESKTOP_DEST" &>/dev/null; then
   rm "$DESKTOP_TMP"
-  skip "Kiosk desktop entry"
+  skip "XDG autostart desktop entry"
 else
   cp "$DESKTOP_TMP" "$DESKTOP_DEST"
   rm "$DESKTOP_TMP"
-  ok "Kiosk desktop entry installed"
+  ok "XDG autostart desktop entry installed"
 fi
 
 # ── 6. Screen-blanking prevention ──────────────────────────────────────────
@@ -171,7 +187,29 @@ EOF
   fi
 fi
 
-# ── 7. Desktop auto-login ──────────────────────────────────────────────────
+# ── 7. Display rotation (180°) ────────────────────────────────────────────
+info "Checking display rotation"
+
+# Bookworm uses /boot/firmware/config.txt; older images use /boot/config.txt
+BOOT_CFG="/boot/firmware/config.txt"
+if [[ ! -f "$BOOT_CFG" ]]; then
+  BOOT_CFG="/boot/config.txt"
+fi
+
+if [[ -f "$BOOT_CFG" ]]; then
+  if grep -q "^display_hdmi_rotate=2" "$BOOT_CFG"; then
+    skip "Display rotation (180°)"
+  else
+    # Remove any existing rotation line before adding ours
+    sudo sed -i '/^display_hdmi_rotate=/d' "$BOOT_CFG"
+    echo "display_hdmi_rotate=2" | sudo tee -a "$BOOT_CFG" >/dev/null
+    ok "Display rotated 180° (takes effect after reboot)"
+  fi
+else
+  warn "Boot config not found — add 'display_hdmi_rotate=2' manually"
+fi
+
+# ── 8. Desktop auto-login ──────────────────────────────────────────────────
 if command -v raspi-config &>/dev/null; then
   # Check current boot behaviour (B4 = desktop autologin)
   CURRENT_BOOT="$(sudo raspi-config nonint get_boot_cli 2>/dev/null || echo "")"

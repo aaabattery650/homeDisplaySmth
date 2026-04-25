@@ -39,4 +39,11 @@ if [ -f "$CHROMIUM_DIR/Preferences" ]; then
   sed -i 's/"exit_type":"Crashed"/"exit_type":"Normal"/' "$CHROMIUM_DIR/Preferences" 2>/dev/null
 fi
 
-exec chromium-browser "${DISPLAY_FLAGS[@]}" "$URL"
+# Use whichever chromium binary is available
+if command -v chromium-browser &>/dev/null; then
+  BROWSER=chromium-browser
+else
+  BROWSER=chromium
+fi
+
+exec "$BROWSER" "${DISPLAY_FLAGS[@]}" "$URL"
