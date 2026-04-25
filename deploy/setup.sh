@@ -255,22 +255,26 @@ EOF
 fi
 
 # ── 7. Display rotation (180°) ────────────────────────────────────────────
-# The kiosk.sh script applies rotation at launch via wlr-randr (Wayland) or
-# xrandr (X11). This section persists it in compositor configs so it also
-# applies outside the kiosk (e.g. login screen, desktop).
+# Bookworm Pi can run wayfire or labwc (or both configs exist). We write
+# rotation to all applicable places and also apply it immediately.
 info "Checking display rotation"
 
-if [[ "$DESKTOP_ENV" == "wayfire" ]]; then
-  WAYFIRE_CONF="$HOME/.config/wayfire.ini"
-  if [[ -f "$WAYFIRE_CONF" ]] && grep -q "transform = 180" "$WAYFIRE_CONF"; then
-    skip "Display rotation (180° via wayfire)"
+# Apply immediately to the current session
+if command -v wlr-randr &>/dev/null; then
+  wlr-randr --output HDMI-A-1 --transform 180 2>/dev/null || true
+  ok "Display rotated 180° (current session)"
+fi
+
+# Persist in wayfire.ini if it exists
+WAYFIRE_CONF="$HOME/.config/wayfire.ini"
+if [[ -f "$WAYFIRE_CONF" ]]; then
+  if grep -q "transform = 180" "$WAYFIRE_CONF"; then
+    skip "wayfire.ini rotation"
   else
     HDMI_OUTPUT="HDMI-A-1"
     if command -v wlr-randr &>/dev/null; then
       DETECTED="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
-      if [[ -n "$DETECTED" ]]; then
-        HDMI_OUTPUT="$DETECTED"
-      fi
+      if [[ -n "$DETECTED" ]]; then HDMI_OUTPUT="$DETECTED"; fi
     fi
     if grep -q "\[output:$HDMI_OUTPUT\]" "$WAYFIRE_CONF" 2>/dev/null; then
       sed -i "/^\[output:$HDMI_OUTPUT\]/a transform = 180" "$WAYFIRE_CONF"
@@ -281,49 +285,35 @@ if [[ "$DESKTOP_ENV" == "wayfire" ]]; then
 transform = 180
 EOF
     fi
-    ok "Display rotated 180° via wayfire (output: $HDMI_OUTPUT)"
+    ok "wayfire.ini rotation added"
   fi
+fi
 
-elif [[ "$DESKTOP_ENV" == "labwc" ]]; then
-  # labwc: add wlr-randr rotation to autostart (before the kiosk line)
-  LABWC_AUTOSTART="$HOME/.config/labwc/autostart"
+# Persist in labwc autostart if labwc dir exists
+LABWC_AUTOSTART="$HOME/.config/labwc/autostart"
+if [[ -d "$HOME/.config/labwc" ]] || [[ -d "/etc/xdg/labwc" ]]; then
+  mkdir -p "$HOME/.config/labwc"
   if [[ -f "$LABWC_AUTOSTART" ]] && grep -qF "wlr-randr" "$LABWC_AUTOSTART"; then
-    skip "Display rotation (180° via wlr-randr in labwc autostart)"
+    skip "labwc autostart rotation"
   else
-    # Prepend so rotation happens before kiosk launches
     LABWC_TMP="$(mktemp)"
     echo 'wlr-randr --output HDMI-A-1 --transform 180' > "$LABWC_TMP"
     if [[ -f "$LABWC_AUTOSTART" ]]; then
       cat "$LABWC_AUTOSTART" >> "$LABWC_TMP"
     fi
     mv "$LABWC_TMP" "$LABWC_AUTOSTART"
-    ok "Display rotated 180° via wlr-randr (labwc autostart)"
+    ok "labwc autostart rotation added"
   fi
+fi
 
-elif [[ "$DESKTOP_ENV" == "lxde" ]]; then
+# LXDE (X11, Bullseye)
+if [[ "$DESKTOP_ENV" == "lxde" ]]; then
   LXDE_AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
   if [[ -f "$LXDE_AUTOSTART" ]] && grep -qF "xrandr --output" "$LXDE_AUTOSTART"; then
-    skip "Display rotation (180° via xrandr)"
+    skip "LXDE xrandr rotation"
   else
     echo "@xrandr --output HDMI-1 --rotate inverted" >> "$LXDE_AUTOSTART"
-    ok "Display rotated 180° via xrandr"
-  fi
-
-else
-  BOOT_CFG="/boot/firmware/config.txt"
-  if [[ ! -f "$BOOT_CFG" ]]; then
-    BOOT_CFG="/boot/config.txt"
-  fi
-  if [[ -f "$BOOT_CFG" ]]; then
-    if grep -q "^display_hdmi_rotate=2" "$BOOT_CFG"; then
-      skip "Display rotation (180°)"
-    else
-      sudo sed -i '/^display_hdmi_rotate=/d' "$BOOT_CFG"
-      echo "display_hdmi_rotate=2" | sudo tee -a "$BOOT_CFG" >/dev/null
-      ok "Display rotated 180° (firmware, takes effect after reboot)"
-    fi
-  else
-    warn "Could not configure display rotation"
+    ok "LXDE rotation added"
   fi
 fi
 
