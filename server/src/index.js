@@ -16,7 +16,7 @@ config({ path: join(ROOT, '.env') });
 config({ path: join(__dirname, '../.env'), override: true });
 
 const PORT = Number(process.env.PORT) || 8787;
-const HOST = process.env.HOST || '127.0.0.1';
+const HOST = process.env.HOST || '0.0.0.0';
 
 const app = Fastify({ logger: { level: 'info' } });
 
