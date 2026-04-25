@@ -257,15 +257,16 @@ EOF
 fi
 
 # ── 7. Display rotation (180°) ────────────────────────────────────────────
+# The kiosk.sh script applies rotation at launch via wlr-randr (Wayland) or
+# xrandr (X11). This section persists it in compositor configs so it also
+# applies outside the kiosk (e.g. login screen, desktop).
 info "Checking display rotation"
 
 if [[ "$DESKTOP_ENV" == "wayfire" ]]; then
-  # KMS driver ignores display_hdmi_rotate — use wayfire output transform
   WAYFIRE_CONF="$HOME/.config/wayfire.ini"
   if [[ -f "$WAYFIRE_CONF" ]] && grep -q "transform = 180" "$WAYFIRE_CONF"; then
     skip "Display rotation (180° via wayfire)"
   else
-    # Detect the HDMI output name (usually HDMI-A-1 or HDMI-A-2)
     HDMI_OUTPUT="HDMI-A-1"
     if command -v wlr-randr &>/dev/null; then
       DETECTED="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
@@ -285,8 +286,23 @@ EOF
     ok "Display rotated 180° via wayfire (output: $HDMI_OUTPUT)"
   fi
 
+elif [[ "$DESKTOP_ENV" == "labwc" ]]; then
+  # labwc: add wlr-randr rotation to autostart (before the kiosk line)
+  LABWC_AUTOSTART="$HOME/.config/labwc/autostart"
+  if [[ -f "$LABWC_AUTOSTART" ]] && grep -qF "wlr-randr" "$LABWC_AUTOSTART"; then
+    skip "Display rotation (180° via wlr-randr in labwc autostart)"
+  else
+    # Prepend so rotation happens before kiosk launches
+    LABWC_TMP="$(mktemp)"
+    echo 'wlr-randr --output HDMI-A-1 --transform 180' > "$LABWC_TMP"
+    if [[ -f "$LABWC_AUTOSTART" ]]; then
+      cat "$LABWC_AUTOSTART" >> "$LABWC_TMP"
+    fi
+    mv "$LABWC_TMP" "$LABWC_AUTOSTART"
+    ok "Display rotated 180° via wlr-randr (labwc autostart)"
+  fi
+
 elif [[ "$DESKTOP_ENV" == "lxde" ]]; then
-  # X11: use xrandr in autostart
   LXDE_AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
   if [[ -f "$LXDE_AUTOSTART" ]] && grep -qF "xrandr --output" "$LXDE_AUTOSTART"; then
     skip "Display rotation (180° via xrandr)"
@@ -296,7 +312,6 @@ elif [[ "$DESKTOP_ENV" == "lxde" ]]; then
   fi
 
 else
-  # Fallback: firmware-level rotation (only works without KMS)
   BOOT_CFG="/boot/firmware/config.txt"
   if [[ ! -f "$BOOT_CFG" ]]; then
     BOOT_CFG="/boot/config.txt"

@@ -6,57 +6,12 @@
   import LaunchesSlide from './widgets/slides/LaunchesSlide.svelte';
   import FlightsSlide from './widgets/slides/FlightsSlide.svelte';
   import { rotation, startRotation, stopRotation, nextSlide, prevSlide } from './lib/rotation.svelte.js';
-  import { WeatherFx } from './lib/weatherFx/WeatherFx.js';
   import { applyPalette } from './lib/palettes.js';
 
-  let bgEl;
-  let fx;
-  let flashAlpha = $state(0);
-  let shakeX = $state(0);
-  let shakeY = $state(0);
-
-  // URL aliases so memorable values still work in dev. The canonical kinds
-  // mirror Open-Meteo's WMO categories.
-  const ALIASES = {
-    sunny: 'clear',
-    cloudy: 'overcast',
-    storm: 'thunderstorm',
-    thunder: 'thunderstorm',
-    1: 'rain',
-    on: 'rain',
-    0: 'clear',
-    off: 'clear',
-  };
-
-  // Accepts ?weather=<kind> (preferred) or legacy ?rain=<kind>.
-  function devOverride() {
-    const p = new URLSearchParams(location.search);
-    const raw = p.get('weather') ?? p.get('rain');
-    if (raw == null) return null;
-    if (raw === '') return 'rain';
-    return ALIASES[raw] ?? raw;
-  }
-
-  // ?day=1 / ?day=0 forces day vs night palette without waiting for sundown.
-  function dayOverride() {
-    const p = new URLSearchParams(location.search);
-    if (!p.has('day')) return null;
-    const v = p.get('day');
-    if (v === '1' || v === 'true' || v === 'yes' || v === '') return true;
-    if (v === '0' || v === 'false' || v === 'no') return false;
-    return null;
-  }
-
-  function applyState(kind, isDay) {
-    fx?.setWeather(kind);
-    fx?.setIsDay(isDay);
-    applyPalette(kind, isDay);
-  }
-
   function onWeather(data) {
-    const kind = devOverride() ?? data?.condition?.kind ?? 'clear';
-    const isDay = dayOverride() ?? data?.isDay ?? true;
-    applyState(kind, isDay);
+    const kind = data?.condition?.kind ?? 'clear';
+    const isDay = data?.isDay ?? true;
+    applyPalette(kind, isDay);
   }
 
   function handleKeydown(e) {
@@ -64,34 +19,22 @@
     else if (e.key === 'ArrowLeft') { e.preventDefault(); prevSlide(); }
   }
 
-  onMount(async () => {
-    fx = new WeatherFx(bgEl, {
-      onFlash: (a) => (flashAlpha = a),
-      onShake: (x, y) => { shakeX = x; shakeY = y; },
-    });
-    await fx.init();
-    fx.setWeather(devOverride() ?? 'clear');
+  onMount(() => {
     startRotation();
     window.addEventListener('keydown', handleKeydown);
   });
 
   onDestroy(() => {
     stopRotation();
-    fx?.destroy();
     window.removeEventListener('keydown', handleKeydown);
   });
 
   let activeSlide = $derived(rotation.slides[rotation.index].id);
 </script>
 
-<div class="bg" bind:this={bgEl}></div>
-
-<div class="lightning" style="opacity: {flashAlpha}"></div>
-
 <main
   class="screen"
   class:quiet={rotation.quiet}
-  style="transform: translate3d({shakeX}px, {shakeY}px, 0)"
 >
   <header class="topbar">
     <Clock />
@@ -115,31 +58,6 @@
 </main>
 
 <style>
-  .bg {
-    position: fixed;
-    inset: 0;
-    z-index: 0;
-    pointer-events: none;
-  }
-
-  /* Lightning flash sits above all widgets so a strike illuminates the whole
-     screen, not just gaps between cards. mix-blend-mode: screen keeps the
-     gradient additive, so the flash brightens rather than overwrites. */
-  .lightning {
-    position: fixed;
-    inset: 0;
-    z-index: 5;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse at 35% 15%,
-        rgba(232, 240, 255, 0.95) 0%,
-        rgba(180, 210, 255, 0.55) 35%,
-        rgba(100, 140, 200, 0.15) 70%,
-        transparent 100%);
-    mix-blend-mode: screen;
-    will-change: opacity;
-  }
-
   .screen {
     position: relative;
     z-index: 1;
@@ -149,7 +67,6 @@
     grid-template-rows: var(--topbar-height) 1fr;
     padding: var(--stage-padding);
     gap: var(--stage-padding);
-    will-change: transform;
   }
 
   .topbar {
