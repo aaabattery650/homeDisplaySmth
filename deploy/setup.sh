@@ -152,6 +152,15 @@ else
   skip "Service (already running, no changes)"
 fi
 
+# ── 4b. Install helper scripts ────────────────────────────────────────────
+chmod +x "$DEPLOY_DIR/rotate-screen"
+if [[ ! -L /usr/local/bin/rotate-screen ]] || [[ "$(readlink -f /usr/local/bin/rotate-screen)" != "$DEPLOY_DIR/rotate-screen" ]]; then
+  sudo ln -sf "$DEPLOY_DIR/rotate-screen" /usr/local/bin/rotate-screen
+  ok "rotate-screen command installed"
+else
+  skip "rotate-screen command"
+fi
+
 # ── 5. Kiosk autostart ─────────────────────────────────────────────────────
 info "Detecting desktop environment"
 chmod +x "$DEPLOY_DIR/kiosk.sh"

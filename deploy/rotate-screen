@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# rotate-screen — Rotate the display by 180° (or back to normal).
+# Usage:
+#   rotate-screen          # toggle between normal and 180°
+#   rotate-screen 180      # rotate 180°
+#   rotate-screen 0        # back to normal
+
+set -euo pipefail
+
+REQUESTED="${1:-toggle}"
+
+get_current() {
+  if command -v wlr-randr &>/dev/null; then
+    # Wayland: check if any HDMI output has "Transform: 180"
+    if wlr-randr 2>/dev/null | grep -A5 "^HDMI" | grep -qi "transform.*180"; then
+      echo "180"
+    else
+      echo "0"
+    fi
+  elif command -v xrandr &>/dev/null; then
+    if xrandr 2>/dev/null | grep "^HDMI" | grep -qi "inverted"; then
+      echo "180"
+    else
+      echo "0"
+    fi
+  else
+    echo "0"
+  fi
+}
+
+apply() {
+  local deg="$1"
+  if command -v wlr-randr &>/dev/null; then
+    HDMI="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1)"
+    if [[ -z "$HDMI" ]]; then
+      echo "No HDMI output detected" >&2; exit 1
+    fi
+    if [[ "$deg" == "180" ]]; then
+      wlr-randr --output "$HDMI" --transform 180
+    else
+      wlr-randr --output "$HDMI" --transform normal
+    fi
+    echo "Display rotated ${deg}° (output: $HDMI)"
+  elif command -v xrandr &>/dev/null; then
+    if [[ "$deg" == "180" ]]; then
+      xrandr --output HDMI-1 --rotate inverted
+    else
+      xrandr --output HDMI-1 --rotate normal
+    fi
+    echo "Display rotated ${deg}° (output: HDMI-1)"
+  else
+    echo "Neither wlr-randr nor xrandr found" >&2; exit 1
+  fi
+}
+
+if [[ "$REQUESTED" == "toggle" ]]; then
+  CURRENT="$(get_current)"
+  if [[ "$CURRENT" == "180" ]]; then
+    apply 0
+  else
+    apply 180
+  fi
+elif [[ "$REQUESTED" == "0" || "$REQUESTED" == "180" ]]; then
+  apply "$REQUESTED"
+else
+  echo "Usage: rotate-screen [0|180]" >&2; exit 1
+fi
