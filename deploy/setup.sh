@@ -59,24 +59,22 @@ fi
 
 ok "Node $(node -v), git installed"
 
-# ── 2. App dependencies & build ────────────────────────────────────────────
+# ── 2. Pull latest code, install deps & build ─────────────────────────────
 cd "$REPO_DIR"
 
-if [[ ! -d "$REPO_DIR/node_modules" ]] || [[ ! -d "$REPO_DIR/server/node_modules" ]] || [[ ! -d "$REPO_DIR/client/node_modules" ]]; then
-  info "Installing npm dependencies"
-  npm run install:all
-  ok "Dependencies installed"
-else
-  skip "npm dependencies"
+if git rev-parse --is-inside-work-tree &>/dev/null; then
+  info "Pulling latest code"
+  git pull --ff-only || warn "git pull failed — continuing with current checkout"
+  ok "Code up to date"
 fi
 
-if [[ ! -d "$REPO_DIR/client/dist" ]] || [[ ! -d "$REPO_DIR/admin/dist" ]]; then
-  info "Building frontend"
-  npm run build
-  ok "Client and admin built"
-else
-  skip "Frontend build (client/dist and admin/dist exist)"
-fi
+info "Installing npm dependencies"
+npm run install:all
+ok "Dependencies installed"
+
+info "Building frontend"
+npm run build
+ok "Client and admin built"
 
 # ── 3. Environment file ────────────────────────────────────────────────────
 if [[ ! -f "$REPO_DIR/server/.env" ]]; then
