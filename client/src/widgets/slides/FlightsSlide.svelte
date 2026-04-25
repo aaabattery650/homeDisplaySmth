@@ -1,61 +1,134 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
   import Slide from './Slide.svelte';
+  import FlightMap from './FlightMap.svelte';
+  import { fetchFlights, HOME_LAT, HOME_LON } from '../../lib/api.js';
 
-  // Stub data — Phase 2 wires the local FlightRadar antenna feed (dump1090).
-  const sample = [
-    { flight: 'AAL218', route: 'SFO → JFK', alt: '34,000 ft', type: 'B789' },
-    { flight: 'UAL455', route: 'LAX → ORD', alt: '36,000 ft', type: 'B738' },
-  ];
+  /** ~85 km full width; frames most of the area; tune for your site */
+  const HALF_SPAN_DEG = 0.38;
+  const MAX_MARKERS = 40;
+  const POLL_MS = 5000;
+
+  function distKey(lat, lon) {
+    const dlat = lat - HOME_LAT;
+    const dlon = (lon - HOME_LON) * Math.cos((HOME_LAT * Math.PI) / 180);
+    return dlat * dlat + dlon * dlon;
+  }
+
+  /** URL-only: ?flights=demo — wire layout without a receiver. */
+  function wantDemo() {
+    if (typeof location === 'undefined') return false;
+    return new URLSearchParams(location.search).get('flights') === 'demo';
+  }
+
+  function demoAircraft() {
+    const s = 0.11;
+    return [
+      { hex: 'demo-1', callsign: 'DEMO1', lat: HOME_LAT + s * 0.55, lon: HOME_LON - s * 0.35, track: 35, altFt: 12500 },
+      { hex: 'demo-2', callsign: 'DEMO2', lat: HOME_LAT - s * 0.4, lon: HOME_LON + s * 0.45, track: 198, altFt: 8200 },
+      { hex: 'demo-3', callsign: 'DEMO3', lat: HOME_LAT + s * 0.2, lon: HOME_LON + s * 0.3, track: 300, altFt: 17600 },
+    ];
+  }
+
+  function pickForMap(list) {
+    return [...list]
+      .sort((a, b) => distKey(a.lat, a.lon) - distKey(b.lat, b.lon))
+      .slice(0, MAX_MARKERS);
+  }
+
+  let rows = $state([]);
+  let detail = $state('loading');
+  let source = $state('');
+
+  let timer;
+
+  async function load() {
+    if (wantDemo()) {
+      rows = demoAircraft();
+      source = 'demo';
+      detail = 'Demo layout — remove ?flights=demo from the URL for live data';
+      return;
+    }
+    try {
+      const r = await fetchFlights();
+      const raw = r.aircraft ?? [];
+      const list = pickForMap(raw);
+      rows = list;
+      source = r.source ?? '';
+
+      if (r.source === 'disabled') {
+        detail = 'Flights disabled (FLIGHTS_PROVIDER=off or FLIGHTS_DATA_URL=off on the server).';
+      } else if (r.source === 'error') {
+        if (r.dataSource === 'opensky' && r.errorKind === 'rate') {
+          detail =
+            'OpenSky rate or daily limit — wait, raise OPENSKY_CACHE_MS, or set OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET in server/.env';
+        } else if (r.dataSource === 'opensky') {
+          detail =
+            'OpenSky could not be reached. Check outbound HTTPS; optional OPENSKY_CLIENT_ID + OPENSKY_CLIENT_SECRET in server/.env for OAuth.';
+        } else if (r.dataSource === 'local' && r.error) {
+          detail = String(r.error);
+        } else {
+          detail =
+            'Local JSON feed failed. Set FLIGHTS_DATA_URL in server/.env or use OpenSky (unset FLIGHTS_DATA_URL, default).';
+        }
+      } else if (raw.length === 0) {
+        detail =
+          r.dataSource === 'opensky'
+            ? 'No ADS-B in this map area from OpenSky (quiet, or no coverage this cycle).'
+            : 'No aircraft with a position in this update.';
+      } else {
+        const base = `showing ${list.length} of ${raw.length} (nearest to home)`;
+        detail =
+          r.dataSource === 'opensky'
+            ? `OpenSky${r.cached ? ' (cached on server' + (r.opensky?.fetchedAt ? ' · ' + r.opensky.fetchedAt : '') + ')' : ''} · ${base}`
+            : `Local feed · ${base}`;
+      }
+    } catch {
+      rows = [];
+      source = 'error';
+      detail = 'Request failed. Is the app server (Fastify) running on the proxy port?';
+    }
+  }
+
+  onMount(() => {
+    load();
+    timer = setInterval(load, POLL_MS);
+  });
+
+  onDestroy(() => {
+    if (timer) clearInterval(timer);
+  });
 </script>
 
 <Slide eyebrow="Overhead now" title="Above the house">
-  <ul class="flights">
-    {#each sample as f}
-      <li class="flight">
-        <div class="ident tabular">{f.flight}</div>
-        <div class="route">{f.route}</div>
-        <div class="meta tabular">
-          <span>{f.alt}</span>
-          <span class="dot">·</span>
-          <span>{f.type}</span>
-        </div>
-      </li>
-    {/each}
-  </ul>
+  <div class="body">
+    <FlightMap
+      centerLat={HOME_LAT}
+      centerLon={HOME_LON}
+      halfSpanDeg={HALF_SPAN_DEG}
+      aircraft={rows}
+    />
+    <p class="foot tabular" class:warn={source === 'error' || source === 'disabled'}>
+      {detail}
+    </p>
+  </div>
 </Slide>
 
 <style>
-  .flights {
-    list-style: none;
+  .body {
+    flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
   }
-  .flight {
-    display: grid;
-    grid-template-columns: 220px 1fr 240px;
-    align-items: baseline;
-    padding: 20px 0;
-    border-top: 1px solid var(--surface-border);
-  }
-  .flight:first-child { border-top: none; }
-  .ident {
+  .foot {
+    margin: 0;
+    font-size: var(--fs-small);
+    color: var(--text-tertiary);
     font-family: var(--font-mono);
-    font-size: var(--fs-large);
-    color: var(--accent-warm);
-    font-weight: 500;
   }
-  .route {
-    font-size: var(--fs-large);
-    color: var(--text-primary);
-  }
-  .meta {
-    text-align: right;
+  .foot.warn {
     color: var(--text-secondary);
-    font-size: var(--fs-medium);
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
   }
-  .dot { color: var(--text-tertiary); }
 </style>
