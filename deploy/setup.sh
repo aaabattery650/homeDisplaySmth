@@ -30,6 +30,12 @@ if [[ ! -f "$REPO_DIR/package.json" ]]; then
   exit 1
 fi
 
+# Prompt for sudo upfront so the rest of the script runs unattended
+info "This script needs sudo for system configuration."
+sudo -v
+# Keep sudo alive in the background for long-running steps (npm install, build)
+while true; do sudo -n true; sleep 50; kill -0 "$$" || exit; done 2>/dev/null &
+
 # ── 1. System packages ─────────────────────────────────────────────────────
 NEED_APT=false
 
@@ -62,19 +68,30 @@ ok "Node $(node -v), git installed"
 # ── 2. Pull latest code, install deps & build ─────────────────────────────
 cd "$REPO_DIR"
 
+PREV_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
+
 if git rev-parse --is-inside-work-tree &>/dev/null; then
   info "Pulling latest code"
   git pull --ff-only || warn "git pull failed — continuing with current checkout"
   ok "Code up to date"
 fi
 
+CURR_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
+BUILD_MARKER="$REPO_DIR/client/dist/.build-commit"
+LAST_BUILD="$(cat "$BUILD_MARKER" 2>/dev/null || echo "")"
+
 info "Installing npm dependencies"
 npm run install:all
 ok "Dependencies installed"
 
-info "Building frontend"
-npm run build
-ok "Client and admin built"
+if [[ "$CURR_HEAD" != "$LAST_BUILD" ]]; then
+  info "Building frontend (source changed)"
+  npm run build
+  echo "$CURR_HEAD" > "$BUILD_MARKER"
+  ok "Client and admin built"
+else
+  skip "Frontend build (already at $CURR_HEAD)"
+fi
 
 # ── 3. Environment file ────────────────────────────────────────────────────
 if [[ ! -f "$REPO_DIR/server/.env" ]]; then
