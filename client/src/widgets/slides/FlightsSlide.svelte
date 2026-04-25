@@ -37,6 +37,7 @@
   let rows = $state([]);
   let detail = $state('loading');
   let source = $state('');
+  let dataSource = $state('');
   let timer;
 
   function verticalIcon(vr) {
@@ -64,9 +65,9 @@
     try {
       const r = await fetchFlights();
       const raw = r.aircraft ?? [];
-      const list = pickForMap(raw);
-      rows = list;
+      rows = raw;
       source = r.source ?? '';
+      dataSource = r.dataSource ?? '';
 
       if (r.source === 'disabled') {
         detail = 'Flights disabled';
@@ -75,7 +76,8 @@
       } else if (raw.length === 0) {
         detail = 'No aircraft overhead';
       } else {
-        detail = `${list.length} flight${list.length === 1 ? '' : 's'} tracked`;
+        const label = dataSource === 'local' ? 'Local antenna' : 'OpenSky';
+        detail = `${raw.length} flight${raw.length === 1 ? '' : 's'} · ${label}`;
       }
     } catch {
       rows = [];
@@ -112,8 +114,11 @@
           </thead>
           <tbody>
             {#each rows.slice(0, 10) as ac}
-              <tr>
-                <td class="callsign">{ac.callsign}</td>
+              <tr class:local={ac.localAntenna}>
+                <td class="callsign">
+                  {ac.callsign}
+                  {#if ac.localAntenna}<span class="antenna-badge" title="Local antenna">📡</span>{/if}
+                </td>
                 <td class="origin">{fmtCountry(ac.originCountry)}</td>
                 <td class="vr">{verticalIcon(ac.verticalRate)}</td>
                 <td class="alt tabular">{fmtAlt(ac.altFt)}</td>
@@ -130,7 +135,7 @@
         centerLat={HOME_LAT}
         centerLon={HOME_LON}
         halfSpanDeg={HALF_SPAN_DEG}
-        aircraft={rows}
+        aircraft={rows.filter(a => a.lat != null && a.lon != null)}
       />
     </div>
   </div>
@@ -207,6 +212,12 @@
     font-family: var(--font-mono);
     font-size: var(--fs-small);
     color: var(--text-secondary);
+  }
+
+  .antenna-badge {
+    font-size: 0.7em;
+    margin-left: 6px;
+    vertical-align: middle;
   }
 
   .foot {

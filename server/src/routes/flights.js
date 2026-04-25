@@ -1,5 +1,5 @@
 // Default: OpenSky Network REST API (no antenna). Optional: local readsb/FR24 JSON via FLIGHTS_DATA_URL.
-import { getOpenSkyAircraft } from '../lib/opensky.js';
+import { getOpenSkyAircraft, enrichFromOpenSky } from '../lib/opensky.js';
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
@@ -21,6 +21,9 @@ function fromFr24Row(arr) {
     lon: Number(arr[2]),
     track: arr[3],
     alt_baro: arr[4],
+    speed: arr[5],
+    vert_rate: arr[15],
+    squawk: arr[6],
   };
 }
 
@@ -40,6 +43,52 @@ function extractAircraftList(data) {
   return [];
 }
 
+// Normalize local feed aircraft. Unlike the OpenSky-only path, we keep
+// aircraft that lack lat/lon (Mode S only) — they appear in the table
+// but not on the map.
+function normalizeLocalAircraft(raw) {
+  const out = [];
+  for (const a of raw) {
+    if (a == null) continue;
+
+    const trackRaw = a.track ?? a.heading ?? a.mag_heading ?? a.true_heading ?? a.nav_heading;
+    const track = Number.isFinite(trackRaw) ? ((Number(trackRaw) % 360) + 360) % 360 : null;
+
+    const flight = a.flight != null ? String(a.flight) : '';
+    const callsign =
+      flight.trim() || (a.r != null ? String(a.r).trim() : '') || (a.reg != null ? String(a.reg) : '') || (a.hex != null ? String(a.hex) : '—');
+
+    const alt = a.alt_baro ?? a.alt_geom ?? a.geom_alt ?? a.altitude ?? a.alt;
+    const altNum = typeof alt === 'number' && Number.isFinite(alt) ? alt : alt === 'ground' ? 0 : null;
+
+    const vel = a.gs ?? a.velocity ?? a.speed;
+    const vr = a.baro_rate ?? a.vert_rate ?? a.vertical_rate ?? a.verticalRate;
+    const tc = a.t ?? a.type ?? a.typecode ?? a.desc ?? null;
+    const oc = a.origin_country ?? a.originCountry ?? null;
+
+    const hasPos = a.lat != null && a.lon != null && Number.isFinite(a.lat) && Number.isFinite(a.lon);
+
+    // Skip entries that are just a hex with nothing useful
+    if (!hasPos && altNum == null && !flight.trim()) continue;
+
+    out.push({
+      hex: a.hex != null ? String(a.hex) : undefined,
+      callsign,
+      lat: hasPos ? Number(a.lat) : null,
+      lon: hasPos ? Number(a.lon) : null,
+      track,
+      altFt: altNum,
+      velocity: vel != null && Number.isFinite(Number(vel)) ? Number(vel) : null,
+      verticalRate: vr != null && Number.isFinite(Number(vr)) ? Number(vr) : null,
+      typecode: tc != null ? String(tc) : null,
+      originCountry: oc != null ? String(oc) : null,
+      localAntenna: true,
+    });
+  }
+  return out;
+}
+
+// Original normalizer for OpenSky-only mode (requires lat/lon)
 function normalizeAircraft(raw) {
   const out = [];
   for (const a of raw) {
@@ -73,15 +122,12 @@ function normalizeAircraft(raw) {
       verticalRate: vr != null && Number.isFinite(Number(vr)) ? Number(vr) : null,
       typecode: tc != null ? String(tc) : null,
       originCountry: oc != null ? String(oc) : null,
+      localAntenna: false,
     });
   }
   return out;
 }
 
-/**
- * @param {string} url
- * @param {import('fastify').FastifyInstance} app
- */
 async function getLocalAircraft(url, app) {
   try {
     const res = await fetch(url, {
@@ -94,16 +140,24 @@ async function getLocalAircraft(url, app) {
     }
     const data = await res.json();
     const list = extractAircraftList(data);
-    return { aircraft: normalizeAircraft(list), source: 'feed', dataSource: 'local' };
+    const aircraft = normalizeLocalAircraft(list);
+
+    // Enrich with OpenSky metadata (type, country) — non-blocking, best-effort
+    if (aircraft.length > 0) {
+      try {
+        await enrichFromOpenSky(aircraft, app.log);
+      } catch (err) {
+        app.log.warn({ err }, 'OpenSky enrichment failed (non-fatal)');
+      }
+    }
+
+    return { aircraft, source: 'feed', dataSource: 'local' };
   } catch (err) {
     app.log.warn({ err, url }, 'local flights feed failed');
     return { aircraft: [], source: 'error', dataSource: 'local' };
   }
 }
 
-/**
- * @param {import('fastify').FastifyInstance} app
- */
 function resolveFlightsMode() {
   const p = (process.env.FLIGHTS_PROVIDER || '').toLowerCase();
   const u = (process.env.FLIGHTS_DATA_URL || '').trim();

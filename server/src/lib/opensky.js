@@ -63,15 +63,22 @@ function stateToAircraft(s) {
   };
 }
 
-async function enrichWithType(aircraft, log) {
+// In-memory cache: hex → { typecode, callsign, country } from OpenSky metadata.
+const metaCache = new Map();
+const META_LOOKUP_MAX = 3;
+
+async function enrichFromOpenSky(aircraft, log) {
   let lookups = 0;
   for (const ac of aircraft) {
     if (!ac.hex) continue;
-    if (typeCache.has(ac.hex)) {
-      ac.typecode = typeCache.get(ac.hex);
+    if (metaCache.has(ac.hex)) {
+      const cached = metaCache.get(ac.hex);
+      if (!ac.typecode && cached.typecode) ac.typecode = cached.typecode;
+      if ((!ac.callsign || ac.callsign === ac.hex) && cached.callsign) ac.callsign = cached.callsign;
+      if (!ac.originCountry && cached.country) ac.originCountry = cached.country;
       continue;
     }
-    if (lookups >= TYPE_LOOKUP_MAX) continue;
+    if (lookups >= META_LOOKUP_MAX) continue;
     lookups++;
     try {
       const res = await fetch(
@@ -80,14 +87,19 @@ async function enrichWithType(aircraft, log) {
       );
       if (res.ok) {
         const meta = await res.json();
-        const tc = meta?.typecode || meta?.icao24TypeCode || null;
-        typeCache.set(ac.hex, tc);
-        ac.typecode = tc;
+        const entry = {
+          typecode: meta?.typecode || meta?.icao24TypeCode || null,
+          callsign: null,
+          country: meta?.country || meta?.owner?.country || null,
+        };
+        metaCache.set(ac.hex, entry);
+        if (!ac.typecode && entry.typecode) ac.typecode = entry.typecode;
+        if (!ac.originCountry && entry.country) ac.originCountry = entry.country;
       } else {
-        typeCache.set(ac.hex, null);
+        metaCache.set(ac.hex, { typecode: null, callsign: null, country: null });
       }
     } catch {
-      typeCache.set(ac.hex, null);
+      metaCache.set(ac.hex, { typecode: null, callsign: null, country: null });
     }
   }
 }
@@ -177,6 +189,8 @@ async function fetchStates(log) {
 /**
  * @param {import('fastify').FastifyInstance} app
  */
+export { enrichFromOpenSky };
+
 export async function getOpenSkyAircraft(app) {
   const log = app.log;
   const now = Date.now();
@@ -203,7 +217,7 @@ export async function getOpenSkyAircraft(app) {
 
   const result = await fetchStates(log);
   if (!result.err && result.aircraft.length > 0) {
-    await enrichWithType(result.aircraft, log);
+    await enrichFromOpenSky(result.aircraft, log);
   }
   if (result.err) {
     dataCache = {
