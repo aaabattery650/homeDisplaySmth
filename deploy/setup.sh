@@ -54,6 +54,7 @@ if $NEED_APT; then
     info "Installing Node.js 22 LTS"
     curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
     sudo apt install -y nodejs
+    NEED_REBOOT=true
   fi
 
   if ! command -v git &>/dev/null; then
@@ -80,6 +81,7 @@ CURR_HEAD="$(git rev-parse HEAD 2>/dev/null || echo "")"
 BUILD_MARKER="$REPO_DIR/client/dist/.build-commit"
 LAST_BUILD="$(cat "$BUILD_MARKER" 2>/dev/null || echo "")"
 NEED_RESTART=false
+NEED_REBOOT=false
 
 # Only run npm install if lock files changed or node_modules missing
 LOCK_HASH="$(cat "$REPO_DIR/package-lock.json" "$REPO_DIR/server/package-lock.json" "$REPO_DIR/client/package-lock.json" "$REPO_DIR/admin/package-lock.json" 2>/dev/null | md5sum | cut -d' ' -f1)"
@@ -206,6 +208,7 @@ homedisplay = $KIOSK_CMD
 EOF
     fi
     ok "wayfire autostart entry added"
+    NEED_REBOOT=true
   fi
   KIOSK_INSTALLED=true
 fi
@@ -220,6 +223,7 @@ if [[ "$DESKTOP_ENV" == "labwc" ]]; then
   else
     echo "$KIOSK_CMD &" >> "$LABWC_AUTOSTART"
     ok "labwc autostart entry added"
+    NEED_REBOOT=true
   fi
   KIOSK_INSTALLED=true
 fi
@@ -237,6 +241,7 @@ if [[ "$DESKTOP_ENV" == "lxde" ]]; then
   else
     echo "@$KIOSK_CMD" >> "$LXDE_AUTOSTART"
     ok "LXDE autostart entry added"
+    NEED_REBOOT=true
   fi
   KIOSK_INSTALLED=true
 fi
@@ -369,6 +374,7 @@ if command -v raspi-config &>/dev/null; then
     info "Enabling desktop auto-login"
     sudo raspi-config nonint do_boot_behaviour B4 2>/dev/null || warn "raspi-config auto-login failed — set manually via sudo raspi-config"
     ok "Auto-login configured"
+    NEED_REBOOT=true
   fi
 else
   warn "raspi-config not found — set desktop auto-login manually"
@@ -388,10 +394,15 @@ else
 fi
 
 # ── Done ────────────────────────────────────────────────────────────────────
+IP="$(hostname -I | awk '{print $1}')"
 echo ""
-info "Setup complete! Reboot to start the kiosk:"
-echo "    sudo reboot"
+if $NEED_REBOOT; then
+  info "Setup complete! Reboot required for changes to take effect:"
+  echo "    sudo reboot"
+else
+  info "Setup complete! No reboot needed — service is already running."
+fi
 echo ""
-echo "  Dashboard:  http://$(hostname -I | awk '{print $1}'):8787"
-echo "  Admin:      http://$(hostname -I | awk '{print $1}'):8787/admin/"
+echo "  Dashboard:  http://${IP}:8787"
+echo "  Admin:      http://${IP}:8787/admin/"
 echo "  Logs:       journalctl -u $SERVICE_NAME -f"
