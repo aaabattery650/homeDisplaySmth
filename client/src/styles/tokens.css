@@ -1,0 +1,43 @@
+:root {
+  /* Palette — cool, ambient, slightly muted. Designed for a wall display
+     viewed from across a room, low-eye-strain at night. */
+  --bg-deep: #07101f;
+  --bg-mid: #0c1830;
+  --bg-soft: #142244;
+
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --surface-border: rgba(255, 255, 255, 0.10);
+
+  --text-primary: #eef3fb;
+  --text-secondary: #9fb0cc;
+  --text-tertiary: #607093;
+
+  --accent-cool: #7eb6ff;
+  --accent-warm: #ffb87a;
+  --accent-rain: #9ec6ff;
+
+  /* Typography */
+  --font-display: "DM Sans", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Type scale tuned for 1080p viewed from across a room */
+  --fs-mega: 7.5rem;     /* clock */
+  --fs-xlarge: 3rem;
+  --fs-large: 2rem;
+  --fs-medium: 1.375rem;
+  --fs-body: 1.125rem;
+  --fs-small: 0.95rem;
+  --fs-label: 0.75rem;
+
+  /* Layout */
+  --topbar-height: 180px;
+  --stage-padding: 48px;
+  --radius-card: 22px;
+
+  /* Motion */
+  --ease-soft: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-soft-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --crossfade-ms: 1500ms;
+}
