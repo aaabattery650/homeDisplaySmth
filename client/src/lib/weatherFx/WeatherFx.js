@@ -30,23 +30,23 @@ const KINDS = {
     sun:    null,
   },
   drizzle: {
-    particles: { type: 'streak', rate: 12, vy: 480, vx: -25, len: 9, color: 0x9ec6ff, alpha: 0.45, width: 1.0 },
+    particles: { type: 'streak', rate: 8, vy: 480, vx: -25, len: 9, color: 0x9ec6ff, alpha: 0.45, width: 1.0 },
     clouds:   { opacity: 0.35, speed: 9, tint: 0xb8c4d8 },
     sun:      null,
   },
   rain: {
-    particles: { type: 'streak', rate: 35, vy: 720, vx: -55, len: 14, color: 0x9ec6ff, alpha: 0.55, width: 1.4 },
+    particles: { type: 'streak', rate: 20, vy: 720, vx: -55, len: 14, color: 0x9ec6ff, alpha: 0.55, width: 1.4 },
     clouds:   { opacity: 0.45, speed: 11, tint: 0xa8b6cd },
     sun:      null,
   },
   thunderstorm: {
-    particles: { type: 'streak', rate: 70, vy: 950, vx: -90, len: 22, color: 0xb8d3ff, alpha: 0.70, width: 1.8 },
+    particles: { type: 'streak', rate: 35, vy: 950, vx: -90, len: 22, color: 0xb8d3ff, alpha: 0.70, width: 1.8 },
     clouds:   { opacity: 0.6, speed: 14, tint: 0x8a96b0 },
     sun:      null,
     lightning: true,
   },
   snow: {
-    particles: { type: 'flake', rate: 18, vy: 60, vx: -10, color: 0xffffff, alpha: 0.85 },
+    particles: { type: 'flake', rate: 10, vy: 60, vx: -10, color: 0xffffff, alpha: 0.85 },
     clouds:   { opacity: 0.4, speed: 5, tint: 0xd6dde8 },
     sun:      null,
   },
@@ -159,7 +159,7 @@ export class WeatherFx {
       ray.rotation = angle;
       rays.addChild(ray);
     }
-    rays.filters = [new BlurFilter({ strength: 6, quality: 1 })];
+    rays.filters = [new BlurFilter({ strength: 4, quality: 1 })];
     this.sunRays = rays;
     sun.addChild(rays);
 
@@ -495,7 +495,7 @@ function makeCloud() {
     c.addChild(lobe);
   }
 
-  c.filters = [new BlurFilter({ strength: 10, quality: 1 })];
+  c.filters = [new BlurFilter({ strength: 6, quality: 1 })];
 
   return {
     container: c,
