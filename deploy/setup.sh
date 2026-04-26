@@ -304,25 +304,40 @@ fi
 # ── 7. Display rotation (180°) ────────────────────────────────────────────
 # Bookworm Pi can run wayfire or labwc (or both configs exist). We write
 # rotation to all applicable places and also apply it immediately.
-info "Checking display rotation"
+# Read DISPLAY_ROTATION from .env (default: 0 = normal, 180 = inverted)
+DISPLAY_ROTATION=0
+if [[ -f "$REPO_DIR/server/.env" ]]; then
+  _rot="$(grep -oP '^\s*DISPLAY_ROTATION\s*=\s*\K\S+' "$REPO_DIR/server/.env" || true)"
+  if [[ "$_rot" == "180" ]]; then DISPLAY_ROTATION=180; fi
+fi
+
+info "Checking display rotation (${DISPLAY_ROTATION}°)"
+
+if [[ "$DISPLAY_ROTATION" == "180" ]]; then
+  WLR_TRANSFORM="180"
+  XRANDR_ROTATE="inverted"
+else
+  WLR_TRANSFORM="normal"
+  XRANDR_ROTATE="normal"
+fi
 
 # Apply immediately to the current session
 if command -v wlr-randr &>/dev/null; then
-  wlr-randr --output HDMI-A-1 --transform 180 2>/dev/null || true
-  ok "Display rotated 180° (current session)"
+  wlr-randr --output HDMI-A-1 --transform "$WLR_TRANSFORM" 2>/dev/null || true
+  ok "Display rotated ${DISPLAY_ROTATION}° (current session)"
 fi
 
 # Persist in wayfire.ini if it exists
 WAYFIRE_CONF="$HOME/.config/wayfire.ini"
 if [[ -f "$WAYFIRE_CONF" ]]; then
-  if grep -q "transform = 180" "$WAYFIRE_CONF"; then
-    skip "wayfire.ini rotation"
-  else
-    HDMI_OUTPUT="HDMI-A-1"
-    if command -v wlr-randr &>/dev/null; then
-      DETECTED="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
-      if [[ -n "$DETECTED" ]]; then HDMI_OUTPUT="$DETECTED"; fi
-    fi
+  HDMI_OUTPUT="HDMI-A-1"
+  if command -v wlr-randr &>/dev/null; then
+    DETECTED="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
+    if [[ -n "$DETECTED" ]]; then HDMI_OUTPUT="$DETECTED"; fi
+  fi
+  # Remove any existing transform line under the HDMI output section
+  sed -i "/^\[output:$HDMI_OUTPUT\]/{n;/^transform = /d}" "$WAYFIRE_CONF" 2>/dev/null || true
+  if [[ "$DISPLAY_ROTATION" == "180" ]]; then
     if grep -q "\[output:$HDMI_OUTPUT\]" "$WAYFIRE_CONF" 2>/dev/null; then
       sed -i "/^\[output:$HDMI_OUTPUT\]/a transform = 180" "$WAYFIRE_CONF"
     else
@@ -332,7 +347,9 @@ if [[ -f "$WAYFIRE_CONF" ]]; then
 transform = 180
 EOF
     fi
-    ok "wayfire.ini rotation added"
+    ok "wayfire.ini rotation set to 180°"
+  else
+    ok "wayfire.ini rotation cleared (normal)"
   fi
 fi
 
@@ -340,27 +357,35 @@ fi
 LABWC_AUTOSTART="$HOME/.config/labwc/autostart"
 if [[ -d "$HOME/.config/labwc" ]] || [[ -d "/etc/xdg/labwc" ]]; then
   mkdir -p "$HOME/.config/labwc"
-  if [[ -f "$LABWC_AUTOSTART" ]] && grep -qF "wlr-randr" "$LABWC_AUTOSTART"; then
-    skip "labwc autostart rotation"
-  else
+  # Remove any existing wlr-randr rotation line
+  if [[ -f "$LABWC_AUTOSTART" ]]; then
+    sed -i '/wlr-randr.*--transform/d' "$LABWC_AUTOSTART"
+  fi
+  if [[ "$DISPLAY_ROTATION" == "180" ]]; then
     LABWC_TMP="$(mktemp)"
     echo 'wlr-randr --output HDMI-A-1 --transform 180' > "$LABWC_TMP"
     if [[ -f "$LABWC_AUTOSTART" ]]; then
       cat "$LABWC_AUTOSTART" >> "$LABWC_TMP"
     fi
     mv "$LABWC_TMP" "$LABWC_AUTOSTART"
-    ok "labwc autostart rotation added"
+    ok "labwc autostart rotation set to 180°"
+  else
+    ok "labwc autostart rotation cleared (normal)"
   fi
 fi
 
 # LXDE (X11, Bullseye)
 if [[ "$DESKTOP_ENV" == "lxde" ]]; then
   LXDE_AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
-  if [[ -f "$LXDE_AUTOSTART" ]] && grep -qF "xrandr --output" "$LXDE_AUTOSTART"; then
-    skip "LXDE xrandr rotation"
-  else
+  # Remove any existing xrandr rotation line
+  if [[ -f "$LXDE_AUTOSTART" ]]; then
+    sed -i '/@xrandr --output.*--rotate/d' "$LXDE_AUTOSTART"
+  fi
+  if [[ "$DISPLAY_ROTATION" == "180" ]]; then
     echo "@xrandr --output HDMI-1 --rotate inverted" >> "$LXDE_AUTOSTART"
-    ok "LXDE rotation added"
+    ok "LXDE rotation set to 180°"
+  else
+    ok "LXDE rotation cleared (normal)"
   fi
 fi
 

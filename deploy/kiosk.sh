@@ -36,16 +36,6 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Rotate display 180° — retry a few times in case the display isn't ready yet
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-for attempt in 1 2 3 4 5; do
-  if "$SCRIPT_DIR/rotate-screen" 180 2>/dev/null; then
-    break
-  fi
-  echo "Rotate attempt $attempt failed, retrying..."
-  sleep 2
-done
-
 # Disable screen blanking (X11)
 if command -v xset &> /dev/null; then
   xset s off
