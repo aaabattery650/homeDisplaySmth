@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 # rotate-screen — Rotate the display by 180° (or back to normal).
+# Uses compositor config files (kanshi, wayfire.ini, xorg.conf.d) so the
+# rotation is authoritative and survives DPMS wake / HDMI hotplug.
+#
 # Usage:
 #   rotate-screen          # toggle between normal and 180°
 #   rotate-screen 180      # rotate 180°
@@ -11,7 +14,6 @@ REQUESTED="${1:-toggle}"
 
 get_current() {
   if command -v wlr-randr &>/dev/null; then
-    # Wayland: check if any HDMI output has "Transform: 180"
     if wlr-randr 2>/dev/null | grep -A5 "^HDMI" | grep -qi "transform.*180"; then
       echo "180"
     else
@@ -30,27 +32,83 @@ get_current() {
 
 apply() {
   local deg="$1"
-  if command -v wlr-randr &>/dev/null; then
-    HDMI="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1)"
-    if [[ -z "$HDMI" ]]; then
-      echo "No HDMI output detected" >&2; exit 1
-    fi
+  local applied=false
+
+  # --- Wayland: update kanshi config (authoritative for labwc) ---
+  KANSHI_CONF="$HOME/.config/kanshi/config"
+  if [[ -d "$HOME/.config/kanshi" ]] || [[ -d "$HOME/.config/labwc" ]]; then
+    mkdir -p "$HOME/.config/kanshi"
     if [[ "$deg" == "180" ]]; then
-      wlr-randr --output "$HDMI" --transform 180
+      cat > "$KANSHI_CONF" <<'EOF'
+profile {
+  output HDMI-A-1 transform 180
+}
+EOF
     else
-      wlr-randr --output "$HDMI" --transform normal
+      cat > "$KANSHI_CONF" <<'EOF'
+profile {
+  output HDMI-A-1 transform normal
+}
+EOF
     fi
-    echo "Display rotated ${deg}° (output: $HDMI)"
-  elif command -v xrandr &>/dev/null; then
+    pkill -HUP kanshi 2>/dev/null || true
+    applied=true
+  fi
+
+  # --- Wayland: update wayfire.ini (authoritative for wayfire) ---
+  WAYFIRE_CONF="$HOME/.config/wayfire.ini"
+  if [[ -f "$WAYFIRE_CONF" ]]; then
+    HDMI="HDMI-A-1"
+    if command -v wlr-randr &>/dev/null; then
+      DETECTED="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
+      if [[ -n "$DETECTED" ]]; then HDMI="$DETECTED"; fi
+    fi
+    sed -i "/^\[output:$HDMI\]/{n;/^transform = /d}" "$WAYFIRE_CONF" 2>/dev/null || true
     if [[ "$deg" == "180" ]]; then
+      if grep -q "\[output:$HDMI\]" "$WAYFIRE_CONF" 2>/dev/null; then
+        sed -i "/^\[output:$HDMI\]/a transform = 180" "$WAYFIRE_CONF"
+      else
+        printf '\n[output:%s]\ntransform = 180\n' "$HDMI" >> "$WAYFIRE_CONF"
+      fi
+    fi
+    applied=true
+  fi
+
+  # --- Also apply immediately via wlr-randr so the user sees it now ---
+  if command -v wlr-randr &>/dev/null; then
+    HDMI="$(wlr-randr 2>/dev/null | grep -oP '^HDMI-A-\d+' | head -1 || true)"
+    if [[ -n "$HDMI" ]]; then
+      if [[ "$deg" == "180" ]]; then
+        wlr-randr --output "$HDMI" --transform 180
+      else
+        wlr-randr --output "$HDMI" --transform normal
+      fi
+      applied=true
+    fi
+  fi
+
+  # --- X11: xorg.conf.d (authoritative) + immediate xrandr ---
+  if command -v xrandr &>/dev/null && ! command -v wlr-randr &>/dev/null; then
+    if [[ "$deg" == "180" ]]; then
+      sudo mkdir -p /etc/X11/xorg.conf.d
+      sudo tee /etc/X11/xorg.conf.d/10-monitor.conf > /dev/null <<'EOF'
+Section "Monitor"
+    Identifier "HDMI-1"
+    Option "Rotate" "inverted"
+EndSection
+EOF
       xrandr --output HDMI-1 --rotate inverted
     else
+      sudo rm -f /etc/X11/xorg.conf.d/10-monitor.conf
       xrandr --output HDMI-1 --rotate normal
     fi
-    echo "Display rotated ${deg}° (output: HDMI-1)"
-  else
+    applied=true
+  fi
+
+  if [[ "$applied" == "false" ]]; then
     echo "Neither wlr-randr nor xrandr found" >&2; exit 1
   fi
+  echo "Display rotated ${deg}° (persistent)"
 }
 
 if [[ "$REQUESTED" == "toggle" ]]; then

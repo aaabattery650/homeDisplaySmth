@@ -301,9 +301,9 @@ EOF
   fi
 fi
 
-# ── 7. Display rotation (180°) ────────────────────────────────────────────
-# Bookworm Pi can run wayfire or labwc (or both configs exist). We write
-# rotation to all applicable places and also apply it immediately.
+# ── 7. Display rotation ───────────────────────────────────────────────────
+# Use compositor config files for rotation so the setting is authoritative
+# and survives DPMS wake / HDMI hotplug (unlike wlr-randr which is ephemeral).
 # Read DISPLAY_ROTATION from .env (default: 0 = normal, 180 = inverted)
 DISPLAY_ROTATION=0
 if [[ -f "$REPO_DIR/server/.env" ]]; then
@@ -313,21 +313,13 @@ fi
 
 info "Checking display rotation (${DISPLAY_ROTATION}°)"
 
-if [[ "$DISPLAY_ROTATION" == "180" ]]; then
-  WLR_TRANSFORM="180"
-  XRANDR_ROTATE="inverted"
-else
-  WLR_TRANSFORM="normal"
-  XRANDR_ROTATE="normal"
+# --- Clean up old wlr-randr autostart lines (ephemeral, causes flicker) ---
+LABWC_AUTOSTART="$HOME/.config/labwc/autostart"
+if [[ -f "$LABWC_AUTOSTART" ]]; then
+  sed -i '/wlr-randr.*--transform/d' "$LABWC_AUTOSTART"
 fi
 
-# Apply immediately to the current session
-if command -v wlr-randr &>/dev/null; then
-  wlr-randr --output HDMI-A-1 --transform "$WLR_TRANSFORM" 2>/dev/null || true
-  ok "Display rotated ${DISPLAY_ROTATION}° (current session)"
-fi
-
-# Persist in wayfire.ini if it exists
+# --- wayfire.ini (Pi 3/4 Bookworm) — authoritative output config ---
 WAYFIRE_CONF="$HOME/.config/wayfire.ini"
 if [[ -f "$WAYFIRE_CONF" ]]; then
   HDMI_OUTPUT="HDMI-A-1"
@@ -353,39 +345,52 @@ EOF
   fi
 fi
 
-# Persist in labwc autostart if labwc dir exists
-LABWC_AUTOSTART="$HOME/.config/labwc/autostart"
+# --- kanshi (labwc / Pi 5 Bookworm) — authoritative output config ---
+# kanshi is the standard way to configure outputs under labwc; the compositor
+# re-applies it on every hotplug / DPMS wake, so the rotation sticks.
 if [[ -d "$HOME/.config/labwc" ]] || [[ -d "/etc/xdg/labwc" ]]; then
-  mkdir -p "$HOME/.config/labwc"
-  # Remove any existing wlr-randr rotation line
-  if [[ -f "$LABWC_AUTOSTART" ]]; then
-    sed -i '/wlr-randr.*--transform/d' "$LABWC_AUTOSTART"
-  fi
+  KANSHI_DIR="$HOME/.config/kanshi"
+  KANSHI_CONF="$KANSHI_DIR/config"
+  mkdir -p "$KANSHI_DIR"
   if [[ "$DISPLAY_ROTATION" == "180" ]]; then
-    LABWC_TMP="$(mktemp)"
-    echo 'wlr-randr --output HDMI-A-1 --transform 180' > "$LABWC_TMP"
-    if [[ -f "$LABWC_AUTOSTART" ]]; then
-      cat "$LABWC_AUTOSTART" >> "$LABWC_TMP"
-    fi
-    mv "$LABWC_TMP" "$LABWC_AUTOSTART"
-    ok "labwc autostart rotation set to 180°"
+    cat > "$KANSHI_CONF" <<'EOF'
+profile {
+  output HDMI-A-1 transform 180
+}
+EOF
+    ok "kanshi config: rotation set to 180°"
   else
-    ok "labwc autostart rotation cleared (normal)"
+    cat > "$KANSHI_CONF" <<'EOF'
+profile {
+  output HDMI-A-1 transform normal
+}
+EOF
+    ok "kanshi config: rotation set to normal"
   fi
+  # Reload kanshi if it's running so the change takes effect immediately
+  pkill -HUP kanshi 2>/dev/null || true
 fi
 
-# LXDE (X11, Bullseye)
+# --- LXDE (X11, Bullseye) — xorg.conf.d is authoritative ---
 if [[ "$DESKTOP_ENV" == "lxde" ]]; then
   LXDE_AUTOSTART="$HOME/.config/lxsession/LXDE-pi/autostart"
-  # Remove any existing xrandr rotation line
+  # Remove old ephemeral xrandr autostart lines
   if [[ -f "$LXDE_AUTOSTART" ]]; then
     sed -i '/@xrandr --output.*--rotate/d' "$LXDE_AUTOSTART"
   fi
+  XORG_CONF="/etc/X11/xorg.conf.d/10-monitor.conf"
   if [[ "$DISPLAY_ROTATION" == "180" ]]; then
-    echo "@xrandr --output HDMI-1 --rotate inverted" >> "$LXDE_AUTOSTART"
-    ok "LXDE rotation set to 180°"
+    sudo mkdir -p /etc/X11/xorg.conf.d
+    sudo tee "$XORG_CONF" > /dev/null <<'EOF'
+Section "Monitor"
+    Identifier "HDMI-1"
+    Option "Rotate" "inverted"
+EndSection
+EOF
+    ok "xorg.conf.d rotation set to 180°"
   else
-    ok "LXDE rotation cleared (normal)"
+    sudo rm -f "$XORG_CONF"
+    ok "xorg.conf.d rotation cleared (normal)"
   fi
 fi
 
